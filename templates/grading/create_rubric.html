@@ -1,0 +1,270 @@
+<!-- templates/grading/create_rubric.html -->
+{% extends 'base.html' %}
+
+{% block title %}Create Rubric{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1>Create New Rubric</h1>
+            <p class="text-muted">Define a rubric for consistent grading</p>
+        </div>
+        <div>
+            <a href="{% url 'grading:rubric_list' %}" class="btn btn-outline-secondary">
+                Back to Rubrics
+            </a>
+        </div>
+    </div>
+    
+    <form method="post">
+        {% csrf_token %}
+        
+        <!-- Basic Info -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Basic Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="name" class="form-label">Rubric Name *</label>
+                        <input type="text" class="form-control" id="name" name="name" required
+                               placeholder="e.g., Essay Grading Rubric">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="rubric_type" class="form-label">Rubric Type *</label>
+                        <select class="form-select" id="rubric_type" name="rubric_type" required>
+                            <option value="ANALYTIC" selected>Analytic Rubric (Multiple Criteria)</option>
+                            <option value="HOLISTIC">Holistic Rubric (Overall Score)</option>
+                            <option value="CHECKLIST">Checklist Rubric (Yes/No Criteria)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="max_score" class="form-label">Maximum Score *</label>
+                        <input type="number" class="form-control" id="max_score" name="max_score" 
+                               value="10" min="1" max="100" step="1" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check mt-4 pt-2">
+                            <input class="form-check-input" type="checkbox" id="is_public" name="is_public">
+                            <label class="form-check-label" for="is_public">
+                                Make this rubric public (other instructors can use it)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea class="form-control" id="description" name="description" rows="3"
+                              placeholder="Describe the purpose and usage of this rubric..."></textarea>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Criteria Section -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Grading Criteria</h5>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addCriterion()">
+                    <i class="bi bi-plus"></i> Add Criterion
+                </button>
+            </div>
+            <div class="card-body" id="criteria-container">
+                <!-- Criteria will be added here by JavaScript -->
+                <div class="text-center py-4" id="no-criteria-message">
+                    <i class="bi bi-ui-checks text-muted" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3">No criteria added yet</h5>
+                    <p class="text-muted">Click "Add Criterion" to start defining your grading criteria.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Preview -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Rubric Preview</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="rubric-preview">
+                        <thead>
+                            <tr>
+                                <th style="width: 30%;">Criterion</th>
+                                <th>Description</th>
+                                <th style="width: 100px;">Max Score</th>
+                                <th style="width: 100px;">Weight</th>
+                            </tr>
+                        </thead>
+                        <tbody id="preview-body">
+                            <!-- Preview rows will be added here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Submit -->
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <button type="button" class="btn btn-outline-secondary" onclick="window.history.back()">
+                        Cancel
+                    </button>
+                    <div>
+                        <input type="hidden" name="criteria_count" id="criteria_count" value="0">
+                        <button type="submit" class="btn btn-primary">
+                            Create Rubric
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Criterion Template (hidden) -->
+<div id="criterion-template" style="display: none;">
+    <div class="criterion-item card mb-3">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Criterion Title *</label>
+                    <input type="text" class="form-control criterion-title" required
+                           placeholder="e.g., Thesis Statement">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Max Score *</label>
+                    <input type="number" class="form-control criterion-max" min="1" max="100" required
+                           value="5">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Weight</label>
+                    <input type="number" class="form-control criterion-weight" min="0.1" max="10" step="0.1"
+                           value="1.0">
+                </div>
+                <div class="col-md-2 mb-3">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="button" class="btn btn-outline-danger w-100" onclick="removeCriterion(this)">
+                        Remove
+                    </button>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Description</label>
+                <textarea class="form-control criterion-desc" rows="2"
+                          placeholder="Describe what this criterion assesses..."></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let criterionCount = 0;
+
+function addCriterion() {
+    criterionCount++;
+    
+    // Get template
+    const template = document.getElementById('criterion-template').innerHTML;
+    const container = document.getElementById('criteria-container');
+    
+    // Remove "no criteria" message if present
+    const noCriteriaMsg = document.getElementById('no-criteria-message');
+    if (noCriteriaMsg) {
+        noCriteriaMsg.remove();
+    }
+    
+    // Add new criterion
+    const newCriterion = document.createElement('div');
+    newCriterion.innerHTML = template;
+    newCriterion.className = 'criterion-item';
+    newCriterion.querySelector('.criterion-title').name = `criterion_title_${criterionCount}`;
+    newCriterion.querySelector('.criterion-max').name = `criterion_max_score_${criterionCount}`;
+    newCriterion.querySelector('.criterion-weight').name = `criterion_weight_${criterionCount}`;
+    newCriterion.querySelector('.criterion-desc').name = `criterion_desc_${criterionCount}`;
+    
+    container.appendChild(newCriterion);
+    
+    // Update count and preview
+    updateCriteriaCount();
+    updatePreview();
+}
+
+function removeCriterion(button) {
+    const criterionItem = button.closest('.criterion-item');
+    criterionItem.remove();
+    
+    // Update count and preview
+    updateCriteriaCount();
+    updatePreview();
+    
+    // Show "no criteria" message if empty
+    const container = document.getElementById('criteria-container');
+    if (container.children.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-4" id="no-criteria-message">
+                <i class="bi bi-ui-checks text-muted" style="font-size: 3rem;"></i>
+                <h5 class="mt-3">No criteria added yet</h5>
+                <p class="text-muted">Click "Add Criterion" to start defining your grading criteria.</p>
+            </div>
+        `;
+    }
+}
+
+function updateCriteriaCount() {
+    const criteriaItems = document.querySelectorAll('.criterion-item');
+    document.getElementById('criteria_count').value = criteriaItems.length;
+}
+
+function updatePreview() {
+    const previewBody = document.getElementById('preview-body');
+    previewBody.innerHTML = '';
+    
+    const criteriaItems = document.querySelectorAll('.criterion-item');
+    let totalWeight = 0;
+    
+    criteriaItems.forEach((item, index) => {
+        const title = item.querySelector('.criterion-title').value || `Criterion ${index + 1}`;
+        const maxScore = item.querySelector('.criterion-max').value || '0';
+        const weight = item.querySelector('.criterion-weight').value || '1.0';
+        const desc = item.querySelector('.criterion-desc').value || 'No description';
+        
+        totalWeight += parseFloat(weight) || 0;
+        
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${title}</td>
+            <td><small class="text-muted">${desc}</small></td>
+            <td class="text-center">${maxScore}</td>
+            <td class="text-center">${weight}</td>
+        `;
+        previewBody.appendChild(row);
+    });
+    
+    // Add total row
+    if (criteriaItems.length > 0) {
+        const totalRow = document.createElement('tr');
+        totalRow.className = 'table-light';
+        totalRow.innerHTML = `
+            <td colspan="2" class="text-end"><strong>Total Weight:</strong></td>
+            <td colspan="2" class="text-center"><strong>${totalWeight.toFixed(1)}</strong></td>
+        `;
+        previewBody.appendChild(totalRow);
+    }
+}
+
+// Initialize with one criterion
+document.addEventListener('DOMContentLoaded', function() {
+    addCriterion();
+    
+    // Update preview on input changes
+    document.getElementById('criteria-container').addEventListener('input', updatePreview);
+});
+</script>
+{% endblock %}

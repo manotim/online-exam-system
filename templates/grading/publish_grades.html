@@ -1,0 +1,182 @@
+<!-- templates/grading/publish_grades.html -->
+{% extends 'base.html' %}
+
+{% block title %}Publish Grades - {{ exam.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1>Publish Grades</h1>
+            <p class="text-muted">
+                Exam: <strong>{{ exam.title }}</strong> | 
+                Ready to publish: <strong>{{ total_graded }}/{{ total_submissions }}</strong>
+            </p>
+        </div>
+        <div>
+            <a href="{% url 'grading:submissions_list' exam_id=exam.exam_id %}" class="btn btn-outline-secondary">
+                Back to Submissions
+            </a>
+        </div>
+    </div>
+    
+    <!-- Warning Alert -->
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle"></i>
+        <strong>Important:</strong> Once published, grades will be visible to students. 
+        This action cannot be undone.
+    </div>
+    
+    <!-- Graded Submissions -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Submissions Ready for Publishing</h5>
+        </div>
+        <div class="card-body">
+            {% if submissions %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Score</th>
+                            <th>Percentage</th>
+                            <th>Grading Status</th>
+                            <th>Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for submission in submissions %}
+                        <tr>
+                            <td>{{ submission.student.email }}</td>
+                            <td>
+                                <strong>{{ submission.total_score|default:"0" }}/{{ exam.total_points }}</strong>
+                            </td>
+                            <td>
+                                {% if submission.total_score and exam.total_points > 0 %}
+                                <span class="badge bg-{% if submission.total_score >= exam.total_points|multiply:0.7 %}success{% elif submission.total_score >= exam.total_points|multiply:0.5 %}warning{% else %}danger{% endif %}">
+                                    {{ submission.total_score|divide:exam.total_points|multiply:100|floatformat:1 }}%
+                                </span>
+                                {% else %}
+                                <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-success">{{ submission.grading_status }}</span>
+                            </td>
+                            <td>{{ submission.updated_at|date:"M d, Y H:i"|default:"-" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <i class="bi bi-hourglass-split text-muted" style="font-size: 3rem;"></i>
+                <h4 class="mt-3">No Graded Submissions</h4>
+                <p class="text-muted">Grade some submissions before publishing.</p>
+                <a href="{% url 'grading:bulk_grade' exam.exam_id %}" class="btn btn-primary">
+                    Start Bulk Grading
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Publish Form -->
+    {% if submissions %}
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Publish Settings</h5>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="mb-4">
+                    <h6>Notification Options:</h6>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="notify_students" name="notify_students" checked>
+                        <label class="form-check-label" for="notify_students">
+                            Notify students via email (if configured)
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="include_feedback" name="include_feedback" checked>
+                        <label class="form-check-label" for="include_feedback">
+                            Include feedback in notifications
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="allow_resubmission" name="allow_resubmission">
+                        <label class="form-check-label" for="allow_resubmission">
+                            Allow students to request resubmission
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label for="publish_message" class="form-label">Publication Message (optional)</label>
+                    <textarea class="form-control" id="publish_message" name="publish_message" rows="3"
+                              placeholder="Add a message that will be included with the published grades..."></textarea>
+                </div>
+                
+                <div class="alert alert-danger">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="confirm_publish" name="confirm_publish" required>
+                        <label class="form-check-label" for="confirm_publish">
+                            <strong>I understand that this will make grades visible to all students and cannot be undone.</strong>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'grading:submissions_list' exam_id=exam.exam_id %}" class="btn btn-outline-secondary">
+                        Cancel
+                    </a>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-send"></i> Publish Grades Now
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Statistics -->
+    {% if total_submissions > 0 %}
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">Grading Statistics</h5>
+        </div>
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-3">
+                    <div class="display-6 text-primary">{{ total_submissions }}</div>
+                    <p class="text-muted">Total Submissions</p>
+                </div>
+                <div class="col-md-3">
+                    <div class="display-6 text-success">{{ total_graded }}</div>
+                    <p class="text-muted">Graded</p>
+                </div>
+                <div class="col-md-3">
+                    <div class="display-6 text-warning">{{ total_submissions|subtract:total_graded }}</div>
+                    <p class="text-muted">Pending</p>
+                </div>
+                <div class="col-md-3">
+                    <div class="display-6 text-info">
+                        {% if total_submissions > 0 %}
+                        {{ total_graded|divide:total_submissions|multiply:100|floatformat:0 }}%
+                        {% else %}
+                        0%
+                        {% endif %}
+                    </div>
+                    <p class="text-muted">Completion Rate</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

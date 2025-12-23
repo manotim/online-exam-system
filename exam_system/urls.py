@@ -1,0 +1,20 @@
+# exam_system/urls.py
+from django.contrib import admin
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('', include('apps.core.urls')),
+    path('users/', include('apps.users.urls')),
+    path('exams/', include('apps.exams.urls')),
+    path('api/', include('apps.api.urls')),
+    path('analytics/', include('apps.analytics.urls')),
+    path('proctoring/', include('apps.proctoring.urls')),
+    path('grading/', include('apps.grading.urls')),
+]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

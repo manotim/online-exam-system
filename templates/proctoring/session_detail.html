@@ -1,0 +1,316 @@
+{% extends 'base.html' %}
+
+{% block title %}Proctoring Session: {{ session.student.email }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'proctoring:dashboard' %}">Proctoring Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'proctoring:session_list' %}">All Sessions</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Session Details</li>
+                </ol>
+            </nav>
+            <h1>Proctoring Session Details</h1>
+            <p class="text-muted">Exam: {{ session.submission.exam.title }}</p>
+        </div>
+    </div>
+    
+    <!-- Session Info Card -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Student Information</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-4">Student:</dt>
+                        <dd class="col-sm-8">{{ session.student.email }}</dd>
+                        
+                        <dt class="col-sm-4">Exam:</dt>
+                        <dd class="col-sm-8">{{ session.submission.exam.title }}</dd>
+                        
+                        <dt class="col-sm-4">Start Time:</dt>
+                        <dd class="col-sm-8">{{ session.start_time|date:"M d, Y H:i:s" }}</dd>
+                        
+                        <dt class="col-sm-4">End Time:</dt>
+                        <dd class="col-sm-8">{{ session.end_time|date:"M d, Y H:i:s"|default:"Still active" }}</dd>
+                        
+                        <dt class="col-sm-4">Duration:</dt>
+                        <dd class="col-sm-8">
+                            {% if session.end_time %}
+                                {{ session.end_time|timesince:session.start_time }}
+                            {% else %}
+                                {{ session.start_time|timesince }} and counting
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Browser Information & Status</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-4">Browser:</dt>
+                        <dd class="col-sm-8">{{ session.browser_name }} {{ session.browser_version }}</dd>
+                        
+                        <dt class="col-sm-4">OS:</dt>
+                        <dd class="col-sm-8">{{ session.os_info }}</dd>
+                        
+                        <dt class="col-sm-4">Resolution:</dt>
+                        <dd class="col-sm-8">{{ session.screen_resolution }}</dd>
+                        
+                        <dt class="col-sm-4">Fullscreen:</dt>
+                        <dd class="col-sm-8">
+                            {% if session.is_fullscreen %}
+                                <span class="badge bg-success">Yes</span>
+                            {% else %}
+                                <span class="badge bg-warning">No</span>
+                            {% endif %}
+                        </dd>
+                        
+                        <dt class="col-sm-4">Status:</dt>
+                        <dd class="col-sm-8">
+                            <span class="badge bg-{% if session.status == 'ACTIVE' %}primary{% elif session.status == 'FLAGGED' %}danger{% else %}success{% endif %}">
+                                {{ session.get_status_display }}
+                            </span>
+                            {% if request.user.role in 'INSTRUCTOR,ADMIN' and session.status != 'COMPLETED' %}
+                            <button class="btn btn-sm btn-outline-secondary ms-2" data-bs-toggle="modal" data-bs-target="#statusModal">
+                                Change
+                            </button>
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Activity Stats -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Activity Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="card border-primary">
+                                <div class="card-body">
+                                    <h2 class="text-primary">{{ session.tab_switch_count }}</h2>
+                                    <p class="mb-0">Tab Switches</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card border-warning">
+                                <div class="card-body">
+                                    <h2 class="text-warning">{{ session.focus_loss_count }}</h2>
+                                    <p class="mb-0">Focus Loss</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card border-danger">
+                                <div class="card-body">
+                                    <h2 class="text-danger">{{ session.copy_paste_attempts }}</h2>
+                                    <p class="mb-0">Copy/Paste Attempts</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card border-info">
+                                <div class="card-body">
+                                    <h2 class="text-info">{{ session.screenshot_count }}</h2>
+                                    <p class="mb-0">Screenshots</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tabs for Activities and Screenshots -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <ul class="nav nav-tabs card-header-tabs" id="sessionTab" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="activities-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#activities" type="button" role="tab">
+                                Suspicious Activities ({{ activities|length }})
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="screenshots-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#screenshots" type="button" role="tab">
+                                Screenshots ({{ screenshots|length }})
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <div class="tab-content" id="sessionTabContent">
+                        <!-- Activities Tab -->
+                        <div class="tab-pane fade show active" id="activities" role="tabpanel">
+                            {% if activities %}
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Activity Type</th>
+                                            <th>Details</th>
+                                            <th>Screenshot</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for activity in activities %}
+                                        <tr>
+                                            <td>{{ activity.timestamp|date:"H:i:s" }}</td>
+                                            <td>
+                                                <span class="badge bg-{% if activity.activity_type == 'TAB_SWITCH' or activity.activity_type == 'WINDOW_BLUR' %}warning{% else %}danger{% endif %}">
+                                                    {{ activity.get_activity_type_display }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <small>
+                                                    {% if activity.details %}
+                                                        {% for key, value in activity.details.items %}
+                                                            {{ key }}: {{ value }}<br>
+                                                        {% endfor %}
+                                                    {% else %}
+                                                        No details
+                                                    {% endif %}
+                                                </small>
+                                            </td>
+                                            <td>
+                                                {% if activity.screenshot_taken %}
+                                                    <span class="badge bg-success">Yes</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">No</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i>
+                                No suspicious activities recorded for this session.
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Screenshots Tab -->
+                        <div class="tab-pane fade" id="screenshots" role="tabpanel">
+                            {% if screenshots %}
+                            <div class="row">
+                                {% for screenshot in screenshots %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h6 class="card-title">
+                                                {{ screenshot.timestamp|date:"H:i:s" }}
+                                                {% if screenshot.is_flagged %}
+                                                <span class="badge bg-danger float-end">Flagged</span>
+                                                {% endif %}
+                                            </h6>
+                                            <p class="card-text small text-muted">
+                                                {{ screenshot.reason }}
+                                            </p>
+                                            <a href="{% url 'proctoring:get_screenshot' screenshot.screenshot_id %}" 
+                                               target="_blank" class="btn btn-sm btn-outline-primary">
+                                                View Screenshot
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i>
+                                No screenshots captured for this session.
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Status Update Modal -->
+{% if request.user.role in 'INSTRUCTOR,ADMIN' and session.status != 'COMPLETED' %}
+<div class="modal fade" id="statusModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Session Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="statusForm">
+                    <div class="mb-3">
+                        <label for="newStatus" class="form-label">New Status</label>
+                        <select class="form-select" id="newStatus" required>
+                            <option value="ACTIVE">Active</option>
+                            <option value="FLAGGED">Flagged</option>
+                            <option value="REVIEWED">Reviewed</option>
+                            <option value="COMPLETED">Completed</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="updateSessionStatus()">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateSessionStatus() {
+    const newStatus = document.getElementById('newStatus').value;
+    const sessionId = '{{ session.session_id }}';
+    
+    fetch(`/proctoring/api/session/${sessionId}/update/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ status: newStatus })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('Error updating status: ' + error);
+    });
+}
+</script>
+{% endif %}
+{% endblock %}

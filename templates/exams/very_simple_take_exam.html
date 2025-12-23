@@ -1,0 +1,94 @@
+<!-- templates/exams/very_simple_take_exam.html -->
+{% extends 'base.html' %}
+
+{% block title %}Taking Exam: {{ exam.title }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h4 class="mb-0">{{ exam.title }}</h4>
+        <small>Total Points: {{ exam.total_points }} | Questions: {{ questions|length }}</small>
+    </div>
+    
+    <div class="alert alert-info m-3">
+        <i class="bi bi-info-circle"></i> Answer all questions. Click "Submit Exam" when finished.
+    </div>
+    
+    <form method="post" id="examForm">
+        {% csrf_token %}
+        
+        <div class="card-body">
+            {% for question in questions %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Question {{ forloop.counter }}</h5>
+                    <small>{{ question.get_question_type_display }} - {{ question.points }} points</small>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">{{ question.question_text|linebreaks }}</p>
+                    
+                    {% comment %} Simple logic without filters {% endcomment %}
+                    {% if question.question_type == 'MCQ' %}
+                        {% for option in question.options %}
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="radio" 
+                                   name="question_{{ question.question_id }}" 
+                                   id="q{{ question.question_id }}_option{{ forloop.counter }}" 
+                                   value="{{ option }}">
+                            <label class="form-check-label" for="q{{ question.question_id }}_option{{ forloop.counter }}">
+                                {{ option }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    
+                    {% elif question.question_type == 'TRUE_FALSE' %}
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="radio" 
+                                   name="question_{{ question.question_id }}" 
+                                   id="q{{ question.question_id }}_true" 
+                                   value="True">
+                            <label class="form-check-label" for="q{{ question.question_id }}_true">
+                                True
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" 
+                                   name="question_{{ question.question_id }}" 
+                                   id="q{{ question.question_id }}_false" 
+                                   value="False">
+                            <label class="form-check-label" for="q{{ question.question_id }}_false">
+                                False
+                            </label>
+                        </div>
+                    
+                    {% else %}
+                        <div class="form-group">
+                            <textarea class="form-control" 
+                                      name="question_{{ question.question_id }}" 
+                                      rows="4"
+                                      placeholder="Type your answer here..."></textarea>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="card-footer">
+            <div class="d-flex justify-content-between">
+                <a href="{% url 'exams:exam_detail' exam.exam_id %}" class="btn btn-secondary">
+                    Cancel
+                </a>
+                <div>
+                    <button type="submit" name="save_progress" class="btn btn-outline-primary me-2">
+                        Save Progress
+                    </button>
+                    <button type="submit" name="submit_exam" class="btn btn-success">
+                        Submit Exam
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

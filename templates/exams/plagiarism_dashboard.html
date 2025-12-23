@@ -1,0 +1,234 @@
+{% extends 'base.html' %}
+
+{% block title %}Plagiarism Detection Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1>Plagiarism Detection</h1>
+            <p class="text-muted">Check student submissions for plagiarism</p>
+        </div>
+    </div>
+    
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h6 class="card-title">High Risk</h6>
+                    <h2>{{ high_risk_count|default:"0" }}</h2>
+                    <small>Similarity ≥ 80%</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Medium Risk</h6>
+                    <h2>{{ medium_risk_count|default:"0" }}</h2>
+                    <small>Similarity 50-80%</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Answers to Check</h6>
+                    <h2>{{ answers_to_check|length }}</h2>
+                    <small>Essay/Short Answer</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Exams</h6>
+                    <h2>{{ exams|length }}</h2>
+                    <small>With submissions</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Checks -->
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Recent Plagiarism Checks</h5>
+                </div>
+                <div class="card-body">
+                    {% if plagiarism_checks %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Exam</th>
+                                    <th>Similarity</th>
+                                    <th>Status</th>
+                                    <th>Checked</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for check in plagiarism_checks|slice:":10" %}
+                                <tr>
+                                    <td>{{ check.answer.submission.student.email }}</td>
+                                    <td>{{ check.answer.submission.exam.title|truncatechars:30 }}</td>
+                                    <td>
+                                        {% if check.similarity_score %}
+                                        <span class="badge bg-{% if check.similarity_score >= 0.8 %}danger{% elif check.similarity_score >= 0.5 %}warning{% else %}success{% endif %}">
+                                            {{ check.similarity_score|floatformat:2 }}
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{% if check.status == 'COMPLETED' %}success{% elif check.status == 'PROCESSING' %}warning{% else %}secondary{% endif %}">
+                                            {{ check.get_status_display }}
+                                        </span>
+                                    </td>
+                                    <td>{{ check.checked_at|timesince }} ago</td>
+                                    <td>
+                                        <a href="{% url 'exams:plagiarism_check_detail' check.check_id %}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            View
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        No plagiarism checks have been run yet.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6>Check Specific Answer</h6>
+                        <select class="form-select mb-2" id="answerSelect">
+                            <option value="">Select an answer to check</option>
+                            {% for answer in answers_to_check|slice:":20" %}
+                            <option value="{{ answer.answer_id }}">
+                                {{ answer.submission.student.email }} - {{ answer.question.question_text|truncatechars:50 }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button class="btn btn-primary w-100" onclick="checkSelectedAnswer()">
+                            <i class="bi bi-search"></i> Run Plagiarism Check
+                        </button>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="mb-3">
+                        <h6>Bulk Check Exam</h6>
+                        <select class="form-select mb-2" id="examSelect">
+                            <option value="">Select an exam</option>
+                            {% for exam in exams %}
+                            <option value="{{ exam.exam_id }}">
+                                {{ exam.title }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button class="btn btn-warning w-100" onclick="bulkCheckExam()">
+                            <i class="bi bi-collection"></i> Check All Answers
+                        </button>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="alert alert-info">
+                        <small>
+                            <i class="bi bi-lightbulb"></i>
+                            <strong>Tip:</strong> Plagiarism checks analyze essay and short answer questions against:
+                            <ul class="mb-0 mt-2">
+                                <li>Other student submissions</li>
+                                <li>Common phrases and patterns</li>
+                            </ul>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function checkSelectedAnswer() {
+    const answerId = document.getElementById('answerSelect').value;
+    if (!answerId) {
+        alert('Please select an answer first');
+        return;
+    }
+    
+    fetch(`/exams/answer/${answerId}/check-plagiarism/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`Plagiarism check started! Score: ${data.similarity_score}`);
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
+}
+
+function bulkCheckExam() {
+    const examId = document.getElementById('examSelect').value;
+    if (!examId) {
+        alert('Please select an exam first');
+        return;
+    }
+    
+    if (!confirm('This will run plagiarism checks on all essay/short answer submissions. Continue?')) {
+        return;
+    }
+    
+    fetch(`/exams/exam/${examId}/bulk-plagiarism-check/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`Scheduled ${data.check_ids.length} plagiarism checks`);
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
+}
+</script>
+{% endblock %}

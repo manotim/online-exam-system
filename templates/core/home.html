@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block title %}Welcome to Online Exam System{% endblock %}
+
+{% block content %}
+<div class="jumbotron bg-light p-5 rounded-lg m-3">
+    <h1 class="display-4">Welcome to Online Exam System</h1>
+    <p class="lead">A comprehensive platform for conducting online examinations with advanced proctoring and analytics.</p>
+    <hr class="my-4">
+    <p>Features include: Secure exams, real-time proctoring, AI plagiarism detection, detailed analytics, and more.</p>
+    {% if not user.is_authenticated %}
+        <div class="mt-4">
+            <a class="btn btn-primary btn-lg me-2" href="{% url 'users:register' %}" role="button">Register Now</a>
+            <a class="btn btn-outline-primary btn-lg" href="{% url 'users:login' %}" role="button">Login</a>
+        </div>
+    {% endif %}
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-4">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <i class="bi bi-shield-lock display-4 text-primary"></i>
+                <h3 class="card-title mt-3">Secure Exams</h3>
+                <p class="card-text">Advanced security features including browser lockdown, AI proctoring, and plagiarism detection.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <i class="bi bi-graph-up display-4 text-success"></i>
+                <h3 class="card-title mt-3">Real-time Analytics</h3>
+                <p class="card-text">Comprehensive analytics and performance tracking for students and instructors.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <i class="bi bi-people display-4 text-info"></i>
+                <h3 class="card-title mt-3">Multi-role Support</h3>
+                <p class="card-text">Support for administrators, instructors, and students with role-based access control.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

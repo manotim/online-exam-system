@@ -1,0 +1,505 @@
+{% extends 'base.html' %}
+
+{% block title %}Submissions List{% endblock %}
+
+{% block extra_css %}
+<style>
+    .status-badge {
+        font-size: 0.8rem;
+        padding: 4px 8px;
+    }
+    .score-progress {
+        width: 60px;
+        height: 6px;
+    }
+    .exam-selector {
+        max-width: 300px;
+    }
+    .hover-row:hover {
+        background-color: #f8f9fa;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'grading:dashboard' %}">Grading Dashboard</a></li>
+                    <li class="breadcrumb-item active">Submissions</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1>Submissions</h1>
+                    <p class="lead mb-0">
+                        {% if exam_filter %}
+                            {{ exam_filter.title }}
+                            <span class="badge bg-info ms-2">{{ exam_filter.questions.count }} questions</span>
+                        {% else %}
+                            All Exams
+                        {% endif %}
+                        <span class="badge bg-secondary ms-2">{{ total_count }} submissions</span>
+                    </p>
+                </div>
+                <div class="btn-group">
+                    {% if exam_filter %}
+                    <a href="{% url 'grading:publish_grades' exam_filter.exam_id %}" class="btn btn-success">
+                        <i class="bi bi-send"></i> Publish Grades
+                    </a>
+                    <a href="{% url 'grading:bulk_grade' exam_filter.exam_id %}" class="btn btn-info">
+                        <i class="bi bi-collection"></i> Bulk Grade
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'grading:start_session' %}" class="btn btn-primary">
+                        <i class="bi bi-play-circle"></i> Start Session
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="btn-group" role="group">
+                                <a href="?filter=all" 
+                                   class="btn btn-outline-primary {% if grading_filter == 'all' %}active{% endif %}">
+                                    All ({{ total_count }})
+                                </a>
+                                <a href="?filter=pending" 
+                                   class="btn btn-outline-warning {% if grading_filter == 'pending' %}active{% endif %}">
+                                    <i class="bi bi-clock"></i> Pending
+                                </a>
+                                <a href="?filter=graded" 
+                                   class="btn btn-outline-success {% if grading_filter == 'graded' %}active{% endif %}">
+                                    <i class="bi bi-check-circle"></i> Graded
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary dropdown-toggle w-100" type="button" 
+                                        id="examDropdown" data-bs-toggle="dropdown">
+                                    {% if exam_filter %}
+                                        {{ exam_filter.title }}
+                                    {% else %}
+                                        Select Exam
+                                    {% endif %}
+                                </button>
+                                <ul class="dropdown-menu" aria-labelledby="examDropdown">
+                                    <li><a class="dropdown-item" href="{% url 'grading:submissions_list' %}">All Exams</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    {% for exam in request.user.exams_created.all %}
+                                    <li>
+                                        <a class="dropdown-item" 
+                                           href="{% url 'grading:exam_submissions' exam.exam_id %}">
+                                            {{ exam.title }}
+                                            <span class="badge bg-secondary float-end">{{ exam.submissions.count }}</span>
+                                        </a>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <form method="get" class="d-flex">
+                                <input type="text" 
+                                       class="form-control me-2" 
+                                       placeholder="Search student..."
+                                       name="q"
+                                       value="{{ request.GET.q }}">
+                                <button type="submit" class="btn btn-outline-primary">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    {% if exam_filter %}
+                    <div class="mt-3">
+                        <a href="{% url 'grading:submissions_list' %}" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> Clear Exam Filter
+                        </a>
+                        
+                        <!-- Export Options -->
+                        <div class="btn-group ms-2">
+                            <button type="button" class="btn btn-sm btn-outline-success dropdown-toggle" 
+                                    data-bs-toggle="dropdown">
+                                <i class="bi bi-download"></i> Export
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" 
+                                       href="{% url 'analytics:export_report' 'exam' exam_filter.exam_id 'csv' %}">
+                                        <i class="bi bi-file-earmark-spreadsheet"></i> Export as CSV
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" 
+                                       href="{% url 'analytics:export_report' 'exam' exam_filter.exam_id 'json' %}">
+                                        <i class="bi bi-file-code"></i> Export as JSON
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    {% if exam_filter %}
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary">
+                <div class="card-body text-center">
+                    <h5 class="card-title">{{ exam_filter.submissions.count }}</h5>
+                    <p class="card-text">Total Submissions</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success">
+                <div class="card-body text-center">
+                    <h5 class="card-title">{{ exam_filter.submissions.filter.is_graded|length }}</h5>
+                    <p class="card-text">Graded</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-warning">
+                <div class="card-body text-center">
+                    <h5 class="card-title">{{ exam_filter.submissions.filter.is_graded=False|length }}</h5>
+                    <p class="card-text">Pending</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-info">
+                <div class="card-body text-center">
+                    <h5 class="card-title">{{ exam_filter.total_points }}</h5>
+                    <p class="card-text">Total Points</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Submissions Table -->
+    <div class="card">
+        <div class="card-body">
+            {% if submissions %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Exam</th>
+                            <th>Submitted</th>
+                            <th>Score</th>
+                            <th>Status</th>
+                            <th>Time Spent</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for submission in submissions %}
+                        <tr class="hover-row {% if submission.is_graded %}table-success-light{% else %}table-warning-light{% endif %}">
+                            <td>
+                                <strong>{{ submission.student.email }}</strong>
+                                {% if submission.student.get_full_name %}
+                                    <br><small>{{ submission.student.get_full_name }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong>{{ submission.exam.title }}</strong>
+                                {% if submission.exam.course %}
+                                    <br><small class="text-muted">{{ submission.exam.course.code }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ submission.submitted_at|date:"M d, Y" }}
+                                <br><small class="text-muted">{{ submission.submitted_at|time }}</small>
+                            </td>
+                            <td>
+                                {% if submission.total_score is not None %}
+                                <div class="d-flex align-items-center">
+                                    <div class="me-2">
+                                        <span class="badge 
+                                            {% if submission.total_score >= submission.exam.total_points|multiply:0.8 %}bg-success
+                                            {% elif submission.total_score >= submission.exam.total_points|multiply:0.6 %}bg-info
+                                            {% elif submission.total_score >= submission.exam.total_points|multiply:0.4 %}bg-warning
+                                            {% else %}bg-danger{% endif %}">
+                                            {{ submission.total_score|floatformat:1 }}/{{ submission.exam.total_points }}
+                                        </span>
+                                    </div>
+                                    <div class="score-progress">
+                                        <div class="progress" style="height: 6px;">
+                                            <div class="progress-bar 
+                                                {% if submission.total_score >= submission.exam.total_points|multiply:0.8 %}bg-success
+                                                {% elif submission.total_score >= submission.exam.total_points|multiply:0.6 %}bg-info
+                                                {% elif submission.total_score >= submission.exam.total_points|multiply:0.4 %}bg-warning
+                                                {% else %}bg-danger{% endif %}" 
+                                                style="width: {% widthratio submission.total_score submission.exam.total_points 100 %}%">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <small>
+                                    {% widthratio submission.total_score submission.exam.total_points 100 %}%
+                                </small>
+                                {% else %}
+                                <span class="badge bg-secondary">Not graded</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge status-badge
+                                    {% if submission.grading_status == 'MANUALLY_GRADED' %}bg-success
+                                    {% elif submission.grading_status == 'AUTO_GRADED' %}bg-info
+                                    {% elif submission.grading_status == 'PARTIALLY_GRADED' %}bg-warning
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ submission.get_grading_status_display }}
+                                </span>
+                                {% if not submission.is_graded %}
+                                <br>
+                                <small class="text-muted">
+                                    {% with manual_questions=submission.answers.filter|length %}
+                                    {{ manual_questions }} to grade
+                                    {% endwith %}
+                                </small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if submission.submitted_at and submission.started_at %}
+                                    {% with duration=submission.submitted_at|timesince:submission.started_at %}
+                                    <span title="{{ duration }}">
+                                        {% if "minute" in duration %}
+                                            {{ duration|slice:":2" }}m
+                                        {% elif "hour" in duration %}
+                                            {{ duration|slice:":2" }}h
+                                        {% else %}
+                                            {{ duration|slice:":2" }}s
+                                        {% endif %}
+                                    </span>
+                                    {% endwith %}
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{% url 'grading:grade_submission' submission.submission_id %}" 
+                                       class="btn 
+                                            {% if submission.is_graded %}btn-outline-success{% else %}btn-warning{% endif %}">
+                                        <i class="bi 
+                                            {% if submission.is_graded %}bi-eye{% else %}bi-pencil{% endif %}"></i>
+                                        {% if submission.is_graded %}Review{% else %}Grade{% endif %}
+                                    </a>
+                                    
+                                    <a href="{% url 'grading:view_feedback' submission.submission_id %}" 
+                                       class="btn btn-outline-info">
+                                        <i class="bi bi-chat-left-text"></i>
+                                    </a>
+                                    
+                                    {% if exam_filter %}
+                                    <a href="{% url 'exams:exam_detail' submission.exam.exam_id %}" 
+                                       class="btn btn-outline-secondary">
+                                        <i class="bi bi-file-text"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5">
+                                <i class="bi bi-inbox display-4 text-muted"></i>
+                                <h4 class="mt-3">No Submissions Found</h4>
+                                <p class="text-muted">
+                                    {% if grading_filter == 'pending' %}
+                                        No pending submissions at the moment.
+                                    {% elif grading_filter == 'graded' %}
+                                        No graded submissions yet.
+                                    {% else %}
+                                        No submissions found for your exams.
+                                    {% endif %}
+                                </p>
+                                <a href="{% url 'grading:dashboard' %}" class="btn btn-primary">
+                                    Back to Dashboard
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            {% if submissions.has_other_pages %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if submissions.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" 
+                           href="?page={{ submissions.previous_page_number }}{% if grading_filter %}&filter={{ grading_filter }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">
+                            Previous
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for i in submissions.paginator.page_range %}
+                        {% if submissions.number == i %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ i }}</span>
+                        </li>
+                        {% elif i > submissions.number|add:"-3" and i < submissions.number|add:"3" %}
+                        <li class="page-item">
+                            <a class="page-link" 
+                               href="?page={{ i }}{% if grading_filter %}&filter={{ grading_filter }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">
+                                {{ i }}
+                            </a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if submissions.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" 
+                           href="?page={{ submissions.next_page_number }}{% if grading_filter %}&filter={{ grading_filter }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">
+                            Next
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                <div class="text-center text-muted">
+                    Page {{ submissions.number }} of {{ submissions.paginator.num_pages }}
+                </div>
+            </nav>
+            {% endif %}
+            
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-inbox display-4 text-muted"></i>
+                <h4 class="mt-3">No Submissions Found</h4>
+                <p class="text-muted">
+                    {% if grading_filter == 'pending' %}
+                        No pending submissions at the moment.
+                    {% elif grading_filter == 'graded' %}
+                        No graded submissions yet.
+                    {% else %}
+                        No submissions found for your exams.
+                    {% endif %}
+                </p>
+                <a href="{% url 'grading:dashboard' %}" class="btn btn-primary">
+                    Back to Dashboard
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Summary & Actions -->
+    <div class="row mt-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Summary</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li><strong>Total Submissions:</strong> {{ total_count }}</li>
+                                <li><strong>Graded:</strong> {{ submissions|filter_is_graded|length }}</li>
+                                <li><strong>Pending:</strong> {{ submissions|filter_not_graded|length }}</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li><strong>Average Score:</strong> 
+                                    {% if submissions|filter_is_graded %}
+                                        {{ submissions|filter_is_graded|avg_score|floatformat:1 }}%
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </li>
+                                <li><strong>Completion Rate:</strong> 
+                                    {% if total_count > 0 %}
+                                        {% widthratio submissions|filter_is_graded|length total_count 100 %}%
+                                    {% else %}
+                                        0%
+                                    {% endif %}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Quick Actions</h5>
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'grading:start_session' %}" class="btn btn-primary">
+                            <i class="bi bi-play-circle"></i> Start Grading Session
+                        </a>
+                        <a href="{% url 'admin:exams_submission_changelist' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-list-check"></i> Admin View
+                        </a>
+                        <a href="{% url 'analytics:instructor_dashboard' %}" class="btn btn-outline-success">
+                            <i class="bi bi-bar-chart"></i> View Analytics
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-refresh for pending submissions
+{% if grading_filter == 'pending' %}
+setInterval(function() {
+    if (document.visibilityState === 'visible') {
+        window.location.reload();
+    }
+}, 30000); // Refresh every 30 seconds for pending submissions
+{% endif %}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl+G: Go to grading
+    if (e.ctrlKey && e.key === 'g') {
+        const firstPending = document.querySelector('.btn-warning');
+        if (firstPending) {
+            e.preventDefault();
+            firstPending.click();
+        }
+    }
+    // Ctrl+S: Start session
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        window.location.href = "{% url 'grading:start_session' %}";
+    }
+});
+
+// Show help
+console.log('Submissions List Keyboard Shortcuts:');
+console.log('Ctrl+G: Grade first pending submission');
+console.log('Ctrl+S: Start grading session');
+</script>
+{% endblock %}

@@ -1,0 +1,472 @@
+{% extends 'base.html' %}
+
+{% block title %}Analytics Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card {
+        border-radius: 10px;
+        transition: transform 0.2s;
+        height: 100%;
+    }
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .stat-icon {
+        font-size: 2.5rem;
+        opacity: 0.8;
+    }
+    .chart-container {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        height: 100%;
+    }
+    .progress-lg {
+        height: 15px;
+        border-radius: 10px;
+    }
+    .trend-up { color: #28a745; }
+    .trend-down { color: #dc3545; }
+    .trend-stable { color: #6c757d; }
+    .quick-action-btn {
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+        transition: all 0.3s;
+    }
+    .quick-action-btn:hover {
+        transform: scale(1.05);
+        text-decoration: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item active">Analytics</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1>Analytics Dashboard</h1>
+                    <p class="lead mb-0">Monitor student performance and exam statistics</p>
+                </div>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary dropdown-toggle" 
+                            data-bs-toggle="dropdown">
+                        <i class="bi bi-download"></i> Export Reports
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><h6 class="dropdown-header">Export Options</h6></li>
+                        <li>
+                            <a class="dropdown-item" href="{% url 'analytics:export_report' 'student' request.user.id 'csv' %}">
+                                <i class="bi bi-file-earmark-spreadsheet"></i> My Performance (CSV)
+                            </a>
+                        </li>
+                        {% if request.user.role in 'INSTRUCTOR,ADMIN' %}
+                        <li>
+                            <a class="dropdown-item" href="#" onclick="exportAllCourses()">
+                                <i class="bi bi-files"></i> All Courses Report
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card text-white bg-primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Total Courses</h6>
+                            <h2 class="mb-0">{{ total_courses }}</h2>
+                            <small>{{ active_courses }} active</small>
+                        </div>
+                        <i class="bi bi-journals stat-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card text-white bg-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Total Exams</h6>
+                            <h2 class="mb-0">{{ total_exams }}</h2>
+                            <small>{{ active_exams }} active</small>
+                        </div>
+                        <i class="bi bi-file-text stat-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card text-white bg-info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Total Students</h6>
+                            <h2 class="mb-0">{{ total_students }}</h2>
+                            <small>{{ active_students }} active</small>
+                        </div>
+                        <i class="bi bi-people stat-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card text-white bg-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Avg. Score</h6>
+                            <h2 class="mb-0">{{ average_score|floatformat:1 }}%</h2>
+                            <small>Across all exams</small>
+                        </div>
+                        <i class="bi bi-graph-up stat-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="row">
+        <!-- Left Column: Course Performance -->
+        <div class="col-lg-8">
+            <!-- Course Performance -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Course Performance</h5>
+                    <a href="{% url 'analytics:course_analytics' %}" class="btn btn-sm btn-outline-primary">
+                        View All Courses
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if course_performance %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Course</th>
+                                    <th>Exams</th>
+                                    <th>Avg. Score</th>
+                                    <th>Participation</th>
+                                    <th>Trend</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for course in course_performance %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ course.course.title }}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ course.course.code }}</small>
+                                    </td>
+                                    <td>{{ course.overview.total_exams }}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="me-2">{{ course.overview.average_score|floatformat:1 }}%</div>
+                                            <div style="width: 100px;">
+                                                <div class="progress progress-lg">
+                                                    <div class="progress-bar 
+                                                        {% if course.overview.average_score >= 80 %}bg-success
+                                                        {% elif course.overview.average_score >= 60 %}bg-info
+                                                        {% elif course.overview.average_score >= 40 %}bg-warning
+                                                        {% else %}bg-danger{% endif %}" 
+                                                        style="width: {{ course.overview.average_score }}%">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {{ course.overview.participation_rate|floatformat:1 }}%
+                                        <br>
+                                        <small>{{ course.overview.total_submissions }} submissions</small>
+                                    </td>
+                                    <td>
+                                        {% if course.trend == 'improving' %}
+                                        <span class="trend-up">
+                                            <i class="bi bi-arrow-up-right"></i> Improving
+                                        </span>
+                                        {% elif course.trend == 'declining' %}
+                                        <span class="trend-down">
+                                            <i class="bi bi-arrow-down-right"></i> Declining
+                                        </span>
+                                        {% else %}
+                                        <span class="trend-stable">
+                                            <i class="bi bi-dash"></i> Stable
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'analytics:course_analytics' course.course.id %}" 
+                                           class="btn btn-sm btn-outline-info">
+                                            Details
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-journals text-muted" style="font-size: 4rem;"></i>
+                        <h4 class="mt-3">No Course Data</h4>
+                        <p class="text-muted">Create courses and exams to see analytics.</p>
+                        <a href="{% url 'admin:exams_course_add' %}" class="btn btn-primary">
+                            <i class="bi bi-plus-circle"></i> Create Course
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Recent Exams -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Recent Exams</h5>
+                    <a href="{% url 'exams:exam_list' %}" class="btn btn-sm btn-outline-primary">
+                        View All Exams
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if exam_stats %}
+                    <div class="row">
+                        {% for stats in exam_stats %}
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title">{{ stats.exam.title }}</h6>
+                                    <p class="text-muted small mb-2">
+                                        {{ stats.exam.course.title|default:"No Course" }}
+                                        | {{ stats.exam.questions.count }} questions
+                                    </p>
+                                    
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <span>Average Score</span>
+                                            <span>{{ stats.scores.average_percentage|floatformat:1 }}%</span>
+                                        </div>
+                                        <div class="progress" style="height: 8px;">
+                                            <div class="progress-bar 
+                                                {% if stats.scores.average_percentage >= 80 %}bg-success
+                                                {% elif stats.scores.average_percentage >= 60 %}bg-info
+                                                {% elif stats.scores.average_percentage >= 40 %}bg-warning
+                                                {% else %}bg-danger{% endif %}" 
+                                                style="width: {{ stats.scores.average_percentage }}%">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row text-center">
+                                        <div class="col-4">
+                                            <small class="text-muted d-block">Submissions</small>
+                                            <strong>{{ stats.participation.graded_count }}</strong>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted d-block">High Score</small>
+                                            <strong>{{ stats.scores.highest_score|floatformat:1 }}</strong>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted d-block">Std Dev</small>
+                                            <strong>{{ stats.scores.std_deviation|floatformat:1 }}</strong>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mt-3">
+                                        <a href="{% url 'analytics:exam_analytics' stats.exam.id %}" 
+                                           class="btn btn-sm btn-outline-primary w-100">
+                                            View Analytics
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-file-text text-muted" style="font-size: 3rem;"></i>
+                        <p class="mt-3">No recent exam data</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Quick Stats & Actions -->
+        <div class="col-lg-4">
+            <!-- Student Rankings -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Top Students</h5>
+                </div>
+                <div class="card-body">
+                    {% if student_rankings %}
+                    <div class="list-group list-group-flush">
+                        {% for student in student_rankings %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ student.name|default:student.email }}</strong>
+                                    <br>
+                                    <small class="text-muted">{{ student.email }}</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-success">{{ student.average_percentage|floatformat:1 }}%</span>
+                                    <br>
+                                    <small class="text-muted">Rank #{{ student.rank }}</small>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <div class="progress" style="height: 5px;">
+                                    <div class="progress-bar bg-success" 
+                                         style="width: {{ student.average_percentage }}%">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="text-center mt-3">
+                        <a href="{% url 'analytics:student_performance' %}" class="btn btn-sm btn-outline-primary">
+                            View All Students
+                        </a>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-person text-muted" style="font-size: 3rem;"></i>
+                        <p class="mt-3">No student data</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <a href="{% url 'grading:submissions_list' %}" 
+                               class="quick-action-btn btn btn-outline-primary d-block">
+                                <i class="bi bi-list-check display-6"></i>
+                                <div class="mt-2">Grade Submissions</div>
+                            </a>
+                        </div>
+                        <div class="col-6">
+                            <a href="{% url 'exams:create_exam' %}" 
+                               class="quick-action-btn btn btn-outline-success d-block">
+                                <i class="bi bi-plus-circle display-6"></i>
+                                <div class="mt-2">Create Exam</div>
+                            </a>
+                        </div>
+                        <div class="col-6">
+                            <a href="{% url 'grading:rubric_list' %}" 
+                               class="quick-action-btn btn btn-outline-info d-block">
+                                <i class="bi bi-ui-checks display-6"></i>
+                                <div class="mt-2">Manage Rubrics</div>
+                            </a>
+                        </div>
+                        <div class="col-6">
+                            <a href="{% url 'analytics:instructor_dashboard' %}" 
+                               class="quick-action-btn btn btn-outline-warning d-block">
+                                <i class="bi bi-graph-up display-6"></i>
+                                <div class="mt-2">View Analytics</div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Insights -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Performance Insights</h5>
+                </div>
+                <div class="card-body">
+                    {% if insights %}
+                    <ul class="list-unstyled mb-0">
+                        {% for insight in insights %}
+                        <li class="mb-2">
+                            <i class="bi 
+                                {% if insight.type == 'success' %}bi-check-circle text-success
+                                {% elif insight.type == 'warning' %}bi-exclamation-triangle text-warning
+                                {% else %}bi-info-circle text-info{% endif %}">
+                            </i>
+                            {{ insight.message }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="text-center py-3">
+                        <i class="bi bi-lightbulb text-muted" style="font-size: 2rem;"></i>
+                        <p class="mt-2 text-muted">No insights available yet</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function exportAllCourses() {
+    if (confirm('Generate report for all courses?')) {
+        // In a real implementation, this would trigger a report generation
+        // For now, show a message
+        alert('Report generation started. You will receive a notification when it\'s ready.');
+    }
+}
+
+// Auto-refresh data every 5 minutes
+setTimeout(function() {
+    window.location.reload();
+}, 300000); // 5 minutes
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl+A: Go to analytics
+    if (e.ctrlKey && e.key === 'a') {
+        e.preventDefault();
+        window.location.href = "{% url 'analytics:instructor_dashboard' %}";
+    }
+    // Ctrl+R: Refresh
+    if (e.ctrlKey && e.key === 'r') {
+        e.preventDefault();
+        window.location.reload();
+    }
+});
+
+console.log('Analytics Keyboard Shortcuts:');
+console.log('Ctrl+A: Go to analytics dashboard');
+console.log('Ctrl+R: Refresh analytics data');
+</script>
+{% endblock %}
