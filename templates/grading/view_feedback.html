@@ -3,95 +3,299 @@
 
 {% block title %}Feedback - {{ submission.exam.title }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    .feedback-card {
+        border-left: 4px solid #6c757d;
+        margin-bottom: 20px;
+        transition: all 0.2s;
+    }
+    .feedback-card.correct {
+        border-left-color: #28a745;
+    }
+    .feedback-card.incorrect {
+        border-left-color: #dc3545;
+    }
+    .feedback-card.partial {
+        border-left-color: #ffc107;
+    }
+    .score-badge {
+        font-size: 1rem;
+        padding: 8px 12px;
+    }
+    .instructor-feedback {
+        background-color: #f8f9fa;
+        border-left: 3px solid #007bff;
+        padding: 15px;
+        border-radius: 5px;
+    }
+    .summary-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .question-num {
+        font-size: 1.2rem;
+        font-weight: bold;
+    }
+    .student-answer {
+        background-color: #fff3cd;
+        border-left: 3px solid #ffc107;
+        padding: 15px;
+        border-radius: 5px;
+    }
+    .correct-answer {
+        background-color: #d4edda;
+        border-left: 3px solid #28a745;
+        padding: 15px;
+        border-radius: 5px;
+    }
+    .percentage-circle {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: conic-gradient(#28a745 0deg, #e9ecef 0deg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+    }
+    .percentage-circle span {
+        background: white;
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 1.5rem;
+    }
+    .grading-feedback {
+        background-color: #e8f4fd;
+        border-left: 4px solid #0d6efd;
+        padding: 15px;
+        border-radius: 5px;
+    }
+    .feedback-text {
+        background-color: white;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #dee2e6;
+    }
+    @media print {
+        .btn, .breadcrumb, footer, .navbar, .no-print {
+            display: none !important;
+        }
+        .card {
+            border: 1px solid #ddd !important;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+        .summary-card {
+            background: #f8f9fa !important;
+            color: black !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1>Feedback</h1>
-            <p class="text-muted">
-                Exam: <strong>{{ exam.title }}</strong> | 
-                Student: <strong>{{ submission.student.email }}</strong> | 
-                Score: <strong>{{ submission.total_score|default:"0" }}/{{ exam.total_points }}</strong>
-            </p>
-        </div>
-        <div>
-            {% if request.user.role in 'INSTRUCTOR,ADMIN' %}
-            <a href="{% url 'grading:grade_submission' submission.submission_id %}" class="btn btn-primary">
-                Edit Grade
-            </a>
-            {% endif %}
-            <a href="{% url 'exams:exam_detail' exam.exam_id %}" class="btn btn-outline-secondary">
-                Back to Exam
-            </a>
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'exams:exam_list' %}">Exams</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'exams:exam_detail' exam.exam_id %}">{{ exam.title }}</a></li>
+            <li class="breadcrumb-item active">Feedback</li>
+        </ol>
+    </nav>
+
+    <!-- Summary Card -->
+    <div class="summary-card mb-4">
+        <div class="row">
+            <div class="col-md-8">
+                <h2 class="text-white mb-3">{{ exam.title }}</h2>
+                <p class="text-white-50 mb-2">
+                    <i class="bi bi-person-circle"></i> 
+                    <strong>Student:</strong> {{ submission.student.email }}
+                    {% if submission.student.get_full_name %}
+                        ({{ submission.student.get_full_name }})
+                    {% endif %}
+                </p>
+                <p class="text-white-50 mb-2">
+                    <i class="bi bi-calendar"></i> 
+                    <strong>Submitted:</strong> {{ submission.submitted_at|date:"F d, Y H:i" }}
+                    {% if submission.submitted_at %}
+                        <span class="badge bg-light text-dark ms-2">{{ submission.submitted_at|timesince }} ago</span>
+                    {% endif %}
+                </p>
+                <p class="text-white-50 mb-0">
+                    <i class="bi bi-check-circle"></i> 
+                    <strong>Status:</strong> 
+                    <span class="badge bg-{% if submission.is_graded %}success{% else %}warning{% endif %}">
+                        {{ submission.get_grading_status_display }}
+                    </span>
+                </p>
+            </div>
+            <div class="col-md-4 text-center text-md-end">
+                {% with percentage=submission.total_score|floatformat:1 %}
+                <h1 class="display-3 text-white mb-2">{{ submission.total_score|default:"0" }}/{{ exam.total_points }}</h1>
+                <p class="text-white-50 mb-0">
+                    {% if exam.total_points > 0 %}
+                        {% widthratio submission.total_score|floatformat:0 exam.total_points 100 %}% Overall
+                    {% endif %}
+                </p>
+                {% endwith %}
+            </div>
         </div>
     </div>
-    
-    <!-- Score Summary -->
-    <div class="card mb-4">
-        <div class="card-body text-center">
-            <h2 class="display-4">
-                {{ submission.total_score|default:"0" }}/{{ exam.total_points }}
-            </h2>
-            <p class="text-muted">
-                {% if submission.total_score and exam.total_points > 0 %}
-                {{ submission.total_score|floatformat:1 }}% | 
-                {% endif %}
-                Status: <span class="badge bg-{% if submission.is_graded %}success{% else %}warning{% endif %}">
-                    {{ submission.grading_status }}
-                </span>
-            </p>
-            {% if submission.submitted_at %}
-            <p class="text-muted">
-                Submitted: {{ submission.submitted_at|date:"F d, Y H:i" }}
-            </p>
-            {% endif %}
+
+    <!-- Quick Stats Row -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="text-muted mb-2">Questions</h5>
+                    <h3>{{ answers|length }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="text-muted mb-2">Correct</h5>
+                    <h3 class="text-success">
+                        {% with correct_count=0 %}
+                            {% for answer in answers %}
+                                {% if answer.points_awarded == answer.question.points %}
+                                    {% with correct_count=correct_count|add:"1" %}{% endwith %}
+                                {% endif %}
+                            {% endfor %}
+                            {{ correct_count }}
+                        {% endwith %}
+                    </h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="text-muted mb-2">Partial</h5>
+                    <h3 class="text-warning">
+                        {% with partial_count=0 %}
+                            {% for answer in answers %}
+                                {% if answer.points_awarded and answer.points_awarded < answer.question.points and answer.points_awarded > 0 %}
+                                    {% with partial_count=partial_count|add:"1" %}{% endwith %}
+                                {% endif %}
+                            {% endfor %}
+                            {{ partial_count }}
+                        {% endwith %}
+                    </h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="text-muted mb-2">Incorrect</h5>
+                    <h3 class="text-danger">
+                        {% with incorrect_count=0 %}
+                            {% for answer in answers %}
+                                {% if answer.points_awarded == 0 %}
+                                    {% with incorrect_count=incorrect_count|add:"1" %}{% endwith %}
+                                {% endif %}
+                            {% endfor %}
+                            {{ incorrect_count }}
+                        {% endwith %}
+                    </h3>
+                </div>
+            </div>
         </div>
     </div>
-    
-    <!-- Answers and Feedback -->
+
+    <!-- Questions and Feedback -->
     {% for answer in answers %}
-    <div class="card mb-4">
+    <div class="card feedback-card mb-4
+        {% if answer.points_awarded == answer.question.points %}correct
+        {% elif answer.points_awarded and answer.points_awarded < answer.question.points %}partial
+        {% elif answer.points_awarded == 0 %}incorrect
+        {% endif %}">
         <div class="card-header">
-            <h5 class="mb-0">
-                Question {{ answer.question.position }}: 
-                {{ answer.question.get_question_type_display }}
-                <span class="badge bg-secondary float-end">
-                    {{ answer.points_awarded|default:"0" }}/{{ answer.question.points }} points
-                </span>
-            </h5>
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <span class="question-num">Question {{ answer.question.position }}</span>
+                    <small class="text-muted ms-2">({{ answer.question.get_question_type_display }})</small>
+                </h5>
+                <div>
+                    <span class="badge bg-primary score-badge">
+                        {{ answer.points_awarded|floatformat:1 }}/{{ answer.question.points }} points
+                    </span>
+                </div>
+            </div>
         </div>
         <div class="card-body">
-            <!-- Question -->
-            <div class="mb-3">
-                <h6>Question:</h6>
+            <!-- Question Text -->
+            <div class="mb-4">
+                <h6 class="text-muted mb-2">Question:</h6>
                 <div class="p-3 bg-light rounded">
                     {{ answer.question.question_text|linebreaks }}
                 </div>
             </div>
             
-            <!-- Student Answer -->
-            <div class="mb-3">
-                <h6>Your Answer:</h6>
-                <div class="p-3 bg-light rounded">
-                    {% if answer.question.question_type in 'MCQ,TRUE_FALSE' %}
-                        <strong>{{ answer.answer_text }}</strong>
+            <!-- Student's Answer -->
+            <div class="mb-4">
+                <h6 class="text-muted mb-2">
+                    <i class="bi bi-person-circle"></i> Your Answer:
+                </h6>
+                <div class="student-answer">
+                    {% if answer.answer_text %}
+                        {% if answer.question.question_type in 'MCQ,TRUE_FALSE' %}
+                            <p class="mb-0"><strong>{{ answer.answer_text }}</strong></p>
+                        {% else %}
+                            {{ answer.answer_text|linebreaks }}
+                        {% endif %}
+                        <small class="text-muted d-block mt-2">
+                            Word count: {{ answer.answer_text|wordcount }}
+                        </small>
                     {% else %}
-                        {{ answer.answer_text|linebreaks }}
+                        <p class="text-muted mb-0"><em>No answer provided</em></p>
                     {% endif %}
                 </div>
             </div>
             
+            <!-- Correct Answer (for instructors/admins) -->
+            {% if request.user.role in 'INSTRUCTOR,ADMIN' and answer.question.correct_answer %}
+            <div class="mb-4">
+                <h6 class="text-muted mb-2">
+                    <i class="bi bi-check-circle-fill text-success"></i> Correct Answer:
+                </h6>
+                <div class="correct-answer">
+                    {% if answer.question.question_type == 'MCQ' %}
+                        <p class="mb-0"><strong>{{ answer.question.correct_answer }}</strong></p>
+                    {% else %}
+                        {{ answer.question.correct_answer|linebreaks }}
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
             <!-- Grading Feedback -->
-            <div class="grading-feedback p-3 rounded" 
-                 style="background-color: #e8f4fd; border-left: 4px solid #0d6efd;">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <h6 class="mb-0">Feedback:</h6>
+            <div class="grading-feedback">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <h6 class="mb-0">
+                        <i class="bi bi-chat-quote"></i> Instructor Feedback:
+                    </h6>
                     <span class="badge bg-info">
                         {% if answer.grader %}
-                        Graded by: {{ answer.grader.email }}
+                            Graded by: {{ answer.grader.email|truncatechars:20 }}
                         {% else %}
-                        Auto-graded
+                            Auto-graded
                         {% endif %}
                     </span>
                 </div>
@@ -102,28 +306,42 @@
                     <small class="text-muted d-block mb-2">Rubric Assessment:</small>
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered">
-                            <thead>
+                            <thead class="table-light">
                                 <tr>
                                     <th>Criterion</th>
                                     <th>Score</th>
-                                    {% if request.user.role in 'INSTRUCTOR,ADMIN' %}
                                     <th>Max</th>
-                                    {% endif %}
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for criterion_id, score_data in answer.rubric_scores.items %}
-                                {% with criterion=answer.question.rubric.criteria.get|get_item:criterion_id %}
+                                {% for criterion_id, score in answer.rubric_scores.items %}
                                 <tr>
-                                    <td>{{ criterion.title|default:criterion_id }}</td>
                                     <td>
-                                        <strong>{{ score_data.score|default:score_data }}</strong>
+                                        {% if answer.question.rubric %}
+                                            {% for criterion in answer.question.rubric.criteria.all %}
+                                                {% if criterion.criterion_id|stringformat:"s" == criterion_id|stringformat:"s" %}
+                                                    {{ criterion.title }}
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            Criterion {{ forloop.counter }}
+                                        {% endif %}
                                     </td>
-                                    {% if request.user.role in 'INSTRUCTOR,ADMIN' %}
-                                    <td>{{ criterion.max_score|default:"-" }}</td>
-                                    {% endif %}
+                                    <td>
+                                        <strong>{{ score }}</strong>
+                                    </td>
+                                    <td>
+                                        {% if answer.question.rubric %}
+                                            {% for criterion in answer.question.rubric.criteria.all %}
+                                                {% if criterion.criterion_id|stringformat:"s" == criterion_id|stringformat:"s" %}
+                                                    {{ criterion.max_score }}
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            {{ answer.question.points }}
+                                        {% endif %}
+                                    </td>
                                 </tr>
-                                {% endwith %}
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -137,80 +355,104 @@
                     {{ answer.manual_feedback|linebreaks }}
                 </div>
                 {% else %}
-                <div class="text-muted">
-                    <i>No specific feedback provided.</i>
-                </div>
+                <p class="text-muted fst-italic mb-3">No specific feedback provided.</p>
                 {% endif %}
                 
                 <!-- Grading Details -->
-                <div class="text-muted small mt-3">
+                <div class="text-muted small mt-2">
                     {% if answer.graded_at %}
-                    Graded on: {{ answer.graded_at|date:"M d, Y H:i" }}
+                    <i class="bi bi-clock"></i> Graded on: {{ answer.graded_at|date:"F d, Y H:i" }}
                     {% endif %}
+                    
                     {% if answer.grading_notes and request.user.role in 'INSTRUCTOR,ADMIN' %}
-                    <div class="mt-1">
+                    <div class="mt-1 p-2 bg-light rounded">
                         <strong>Grader Notes:</strong> {{ answer.grading_notes }}
                     </div>
                     {% endif %}
                 </div>
             </div>
-            
-            <!-- Correct Answer (if available and allowed) -->
-            {% if request.user.role in 'INSTRUCTOR,ADMIN' and answer.question.correct_answer %}
-            <div class="mt-3 p-3 bg-light rounded">
-                <h6>Correct Answer:</h6>
-                <p class="mb-0">
-                    {% if answer.question.question_type == 'MCQ' %}
-                        Option: {{ answer.question.correct_answer }}
-                    {% else %}
-                        {{ answer.question.correct_answer|linebreaks }}
-                    {% endif %}
-                </p>
-            </div>
-            {% endif %}
         </div>
     </div>
     {% empty %}
-    <div class="text-center py-5">
-        <i class="bi bi-chat-square-text text-muted" style="font-size: 4rem;"></i>
-        <h3 class="mt-3">No Answers Submitted</h3>
-        <p class="text-muted">This submission doesn't have any answers yet.</p>
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-chat-square-text text-muted" style="font-size: 4rem;"></i>
+            <h3 class="mt-3">No Answers Submitted</h3>
+            <p class="text-muted">This submission doesn't have any answers yet.</p>
+        </div>
     </div>
     {% endfor %}
     
-    <!-- Navigation -->
-    <div class="card mt-4">
+    <!-- Action Buttons -->
+    <div class="card mt-4 no-print">
         <div class="card-body">
             <div class="row">
                 <div class="col-md-6">
                     {% if request.user.role in 'INSTRUCTOR,ADMIN' %}
-                    <a href="{% url 'grading:submissions_list' exam_id=exam.exam_id %}" 
-                       class="btn btn-outline-secondary">
-                        Back to Submissions
+                    <a href="{% url 'grading:grade_submission' submission.submission_id %}" class="btn btn-primary">
+                        <i class="bi bi-pencil"></i> Edit Grades
+                    </a>
+                    <a href="{% url 'grading:submissions_list_exam' exam.exam_id %}" class="btn btn-outline-secondary ms-2">
+                        <i class="bi bi-list-check"></i> All Submissions
+                    </a>
+                    {% else %}
+                    <a href="{% url 'exams:exam_detail' exam.exam_id %}" class="btn btn-primary">
+                        <i class="bi bi-arrow-left"></i> Back to Exam
                     </a>
                     {% endif %}
                 </div>
                 <div class="col-md-6 text-end">
+                    <button class="btn btn-outline-primary" onclick="window.print()">
+                        <i class="bi bi-printer"></i> Print Feedback
+                    </button>
+                    
                     {% if request.user.role == 'STUDENT' %}
-                    <a href="{% url 'analytics:student_performance' %}" class="btn btn-info">
-                        View Performance Analytics
+                    <a href="{% url 'analytics:student_performance' %}" class="btn btn-info ms-2">
+                        <i class="bi bi-graph-up"></i> Performance Analytics
                     </a>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Keyboard Shortcuts Help (hidden) -->
+    <div class="text-center text-muted small mt-3 no-print">
+        <i class="bi bi-keyboard"></i> Keyboard shortcuts: 
+        <span class="badge bg-light text-dark">Ctrl+P</span> Print | 
+        <span class="badge bg-light text-dark">Ctrl+B</span> Back
+    </div>
 </div>
 
-<style>
-.grading-feedback {
-    border-radius: 0.375rem;
-}
-.feedback-text {
-    background-color: white;
-    padding: 1rem;
-    border-radius: 0.25rem;
-    border: 1px solid #dee2e6;
-}
-</style>
+<!-- Keyboard Shortcuts Script -->
+<script>
+document.addEventListener('keydown', function(e) {
+    // Ctrl+P: Print
+    if (e.ctrlKey && e.key === 'p') {
+        e.preventDefault();
+        window.print();
+    }
+    
+    // Ctrl+B: Back
+    if (e.ctrlKey && e.key === 'b') {
+        e.preventDefault();
+        {% if request.user.role in 'INSTRUCTOR,ADMIN' %}
+            window.location.href = "{% url 'grading:submissions_list_exam' exam.exam_id %}";
+        {% else %}
+            window.location.href = "{% url 'exams:exam_detail' exam.exam_id %}";
+        {% endif %}
+    }
+});
+
+// Log shortcuts to console
+console.log('Feedback View Shortcuts:');
+console.log('Ctrl+P: Print feedback');
+console.log('Ctrl+B: Back to ' + 
+    {% if request.user.role in 'INSTRUCTOR,ADMIN' %}
+        'submissions list'
+    {% else %}
+        'exam details'
+    {% endif %}
+);
+</script>
 {% endblock %}

@@ -26,4 +26,6 @@ urlpatterns = [
     path('templates/<uuid:template_id>/create-exam/', views_templates.template_create_exam, name='template_create_exam'),
     path('templates/<uuid:template_id>/add-question/', views_templates.template_add_question, name='template_add_question'),
     path('templates/question/<uuid:question_id>/delete/', views_templates.template_delete_question, name='template_delete_question'),
+    # apps/exams/urls.py - add this line
+    path('debug-submissions/', views.debug_submissions, name='debug_submissions'),
 ]

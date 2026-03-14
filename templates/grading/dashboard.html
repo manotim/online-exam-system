@@ -1,3 +1,4 @@
+<!-- templates/grading/dashboard.html -->
 {% extends 'base.html' %}
 
 {% block title %}Grading Dashboard{% endblock %}
@@ -29,6 +30,16 @@
     .badge-count {
         font-size: 0.8rem;
         padding: 0.25rem 0.5rem;
+    }
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .progress-bar-animated {
+        animation: progress-bar-stripes 1s linear infinite;
     }
 </style>
 {% endblock %}
@@ -68,26 +79,26 @@
 
     <!-- Stats Cards -->
     <div class="row mb-4">
-        <div class="col-xl-3 col-md-6">
+        <div class="col-xl-3 col-md-6 mb-3">
             <div class="card text-white bg-warning">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="card-title">Pending Grading</h6>
                             <h2 class="mb-0">{{ total_pending }}</h2>
-                            <small>{{ total_exams }} exams total</small>
+                            <small>Submissions needing attention</small>
                         </div>
                         <i class="bi bi-clock-history display-6"></i>
                     </div>
                     <a href="{% url 'grading:submissions_list' %}?filter=pending" 
-                       class="text-white text-decoration-none d-block mt-3">
-                        View All →
+                       class="text-white text-decoration-none d-block mt-3 small">
+                        View All Pending →
                     </a>
                 </div>
             </div>
         </div>
         
-        <div class="col-xl-3 col-md-6">
+        <div class="col-xl-3 col-md-6 mb-3">
             <div class="card text-white bg-success">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
@@ -99,48 +110,45 @@
                         <i class="bi bi-check-circle display-6"></i>
                     </div>
                     <a href="{% url 'grading:submissions_list' %}?filter=graded" 
-                       class="text-white text-decoration-none d-block mt-3">
-                        View All →
+                       class="text-white text-decoration-none d-block mt-3 small">
+                        View Graded →
                     </a>
                 </div>
             </div>
         </div>
         
-        <div class="col-xl-3 col-md-6">
-            <div class="card bg-primary text-white">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card text-white bg-primary">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h6 class="card-title">Start Grading</h6>
-                            <p class="mb-0">Begin a focused session</p>
+                            <h6 class="card-title">Total Exams</h6>
+                            <h2 class="mb-0">{{ total_exams }}</h2>
+                            <small>Active exams</small>
                         </div>
-                        <i class="bi bi-play-circle display-6"></i>
+                        <i class="bi bi-journal-bookmark display-6"></i>
                     </div>
-                    <div class="mt-3">
-                        <a href="{% url 'grading:start_session' %}" class="btn btn-light btn-sm">
-                            <i class="bi bi-play-fill"></i> Start Session
-                        </a>
-                    </div>
+                    <a href="{% url 'exams:exam_list' %}" 
+                       class="text-white text-decoration-none d-block mt-3 small">
+                        View All Exams →
+                    </a>
                 </div>
             </div>
         </div>
         
-        <div class="col-xl-3 col-md-6">
-            <div class="card bg-info text-white">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card text-white bg-info">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h6 class="card-title">Quick Actions</h6>
-                            <p class="mb-0">Grade efficiently</p>
+                            <h6 class="card-title">Start Session</h6>
+                            <p class="mb-0">Begin grading now</p>
                         </div>
-                        <i class="bi bi-lightning display-6"></i>
+                        <i class="bi bi-play-circle display-6"></i>
                     </div>
                     <div class="mt-3">
-                        <a href="{% url 'admin:grading_rubric_add' %}" class="btn btn-light btn-sm me-1">
-                            <i class="bi bi-plus"></i> New Rubric
-                        </a>
-                        <a href="{% url 'admin:exams_question_add' %}" class="btn btn-light btn-sm">
-                            <i class="bi bi-question-circle"></i> Add Question
+                        <a href="{% url 'grading:start_session' %}" class="btn btn-light btn-sm w-100">
+                            <i class="bi bi-play-fill"></i> Start Session
                         </a>
                     </div>
                 </div>
@@ -148,144 +156,177 @@
         </div>
     </div>
 
-    <!-- Two Column Layout -->
+    <!-- Quick Access by Exam -->
+    {% if exam_stats %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-lightning-charge"></i> Quick Grade by Exam</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for stat in exam_stats %}
+                        <div class="col-md-3 mb-3">
+                            <div class="card h-100 border-warning">
+                                <div class="card-body">
+                                    <h6 class="card-title">{{ stat.exam.title|truncatechars:30 }}</h6>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="display-6 text-warning">{{ stat.pending }}</span>
+                                        <span class="text-muted">pending</span>
+                                    </div>
+                                    <div class="progress mt-2" style="height: 5px;">
+                                        <div class="progress-bar bg-warning" style="width: {{ stat.pending|add:total_graded|floatformat:0 }}%"></div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <a href="{% url 'grading:submissions_list_exam' stat.exam.exam_id %}?filter=pending" 
+                                           class="btn btn-sm btn-outline-warning w-100">
+                                            Grade Now
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="row">
         <!-- Left Column: Pending Submissions -->
         <div class="col-lg-8">
             <!-- Pending Submissions -->
             <div class="card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Pending Submissions</h5>
-                    <span class="badge bg-warning">{{ total_pending }} pending</span>
+                <div class="card-header d-flex justify-content-between align-items-center bg-warning text-white">
+                    <h5 class="mb-0"><i class="bi bi-hourglass-split"></i> Submissions Needing Grading</h5>
+                    <span class="badge bg-light text-dark">{{ total_pending }} pending</span>
                 </div>
                 <div class="card-body">
                     {% if pending_submissions %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Student</th>
-                                    <th>Exam</th>
-                                    <th>Submitted</th>
-                                    <th>Questions</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for submission in pending_submissions %}
-                                <tr>
-                                    <td>
-                                        <strong>{{ submission.student.email }}</strong>
-                                        {% if submission.student.get_full_name %}
-                                            <br><small>{{ submission.student.get_full_name }}</small>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {{ submission.exam.title }}
-                                        <br><small class="text-muted">{{ submission.exam.course.code|default:"No Course" }}</small>
-                                    </td>
-                                    <td>
-                                        {{ submission.submitted_at|date:"M d" }}
-                                        <br><small class="text-muted">{{ submission.submitted_at|time }}</small>
-                                    </td>
-                                    <td>
-                                        {% with manual_count=submission.exam.questions.filter|length %}
-                                        {% with graded_count=submission.answers.filter|length %}
-                                        <div class="progress progress-sm">
-                                            <div class="progress-bar bg-warning" 
-                                                 style="width: {% widthratio graded_count manual_count 100 %}%">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Student</th>
+                                        <th>Exam</th>
+                                        <th>Submitted</th>
+                                        <th>Progress</th>
+                                        <th>Type</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in pending_submissions %}
+                                    <tr class="{% if item.needs_manual %}table-warning{% endif %}">
+                                        <td>
+                                            <strong>{{ item.student.email|truncatechars:20 }}</strong>
+                                            {% if item.student.get_full_name %}
+                                                <br><small class="text-muted">{{ item.student.get_full_name|truncatechars:20 }}</small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {{ item.exam.title|truncatechars:25 }}
+                                            <br><small class="text-muted">{{ item.exam.total_points }} pts</small>
+                                        </td>
+                                        <td>
+                                            {{ item.submitted_at|date:"M d, H:i" }}
+                                            <br><small class="text-muted">{{ item.submitted_at|timesince }} ago</small>
+                                        </td>
+                                        <td>
+                                            <div class="progress mb-1" style="height: 5px; width: 100px;">
+                                                <div class="progress-bar bg-success" style="width: {{ item.progress }}%"></div>
                                             </div>
-                                        </div>
-                                        <small>{{ graded_count }}/{{ manual_count }} graded</small>
-                                        {% endwith %}
-                                        {% endwith %}
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-warning">
-                                            {{ submission.get_grading_status_display }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div class="btn-group btn-group-sm" role="group">
-                                            <a href="{% url 'grading:simple_grade' submission.submission_id %}" 
-                                               class="btn btn-warning">
+                                            <small>{{ item.graded_answers }}/{{ item.total_answers }}</small>
+                                        </td>
+                                        <td>
+                                            {% if item.needs_manual %}
+                                                <span class="badge bg-warning">Manual</span>
+                                            {% else %}
+                                                <span class="badge bg-info">Auto</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <a href="{% url 'grading:grade_submission' item.submission.submission_id %}" 
+                                               class="btn btn-sm btn-primary">
                                                 <i class="bi bi-pencil"></i> Grade
                                             </a>
-                                            <a href="{% url 'exams:exam_detail' submission.exam.exam_id %}" 
-                                               class="btn btn-outline-secondary">
-                                                <i class="bi bi-eye"></i>
-                                            </a>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    {% if total_pending > 10 %}
-                    <div class="text-center mt-3">
-                        <a href="{% url 'grading:submissions_list' %}?filter=pending" class="btn btn-outline-primary">
-                            View All {{ total_pending }} Pending Submissions
-                        </a>
-                    </div>
-                    {% endif %}
-                    
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        {% if total_pending > 10 %}
+                        <div class="text-center mt-3">
+                            <a href="{% url 'grading:submissions_list' %}?filter=pending" class="btn btn-outline-primary">
+                                View All {{ total_pending }} Pending Submissions
+                            </a>
+                        </div>
+                        {% endif %}
+                        
                     {% else %}
-                    <div class="text-center py-5">
-                        <i class="bi bi-check-circle display-4 text-muted"></i>
-                        <h4 class="mt-3">No Pending Submissions</h4>
-                        <p class="text-muted">All submissions have been graded.</p>
-                        <a href="{% url 'grading:start_session' %}" class="btn btn-primary">
-                            <i class="bi bi-plus-circle"></i> Start New Grading Session
-                        </a>
-                    </div>
+                        <div class="text-center py-5">
+                            <i class="bi bi-check-circle display-1 text-success"></i>
+                            <h4 class="mt-3">All Caught Up!</h4>
+                            <p class="text-muted">No submissions pending grading at the moment.</p>
+                            <a href="{% url 'grading:submissions_list' %}" class="btn btn-primary">
+                                <i class="bi bi-list-check"></i> View All Submissions
+                            </a>
+                        </div>
                     {% endif %}
                 </div>
             </div>
 
             <!-- Recent Grading Activity -->
             <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Recent Grading Activity</h5>
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Grading Activity</h5>
                 </div>
                 <div class="card-body">
                     {% if recent_grading %}
-                    <div class="list-group list-group-flush">
-                        {% for answer in recent_grading %}
-                        <div class="list-group-item">
-                            <div class="d-flex w-100 justify-content-between">
-                                <div>
-                                    <h6 class="mb-1">{{ answer.submission.exam.title }}</h6>
-                                    <small class="text-muted">
-                                        Q{{ answer.question.position }}: {{ answer.question.question_text|truncatewords:10 }}
-                                    </small>
+                        <div class="list-group list-group-flush">
+                            {% for answer in recent_grading %}
+                            <div class="list-group-item px-0">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <h6 class="mb-1">{{ answer.submission.exam.title|truncatechars:30 }}</h6>
+                                        <small class="text-muted">
+                                            <i class="bi bi-person"></i> {{ answer.submission.student.email|truncatechars:20 }}
+                                        </small>
+                                        <br>
+                                        <small class="text-muted">
+                                            Q{{ answer.question.position }}: {{ answer.question.question_text|truncatewords:8 }}
+                                        </small>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge bg-success mb-1">{{ answer.points_awarded }}/{{ answer.question.points }}</span>
+                                        <br>
+                                        <small class="text-muted">{{ answer.graded_at|timesince }} ago</small>
+                                    </div>
                                 </div>
-                                <div class="text-end">
-                                    <span class="badge bg-success">
-                                        {{ answer.points_awarded }}/{{ answer.question.points }}
-                                    </span>
-                                    <br>
-                                    <small class="text-muted">{{ answer.graded_at|timesince }} ago</small>
-                                </div>
-                            </div>
-                            <div class="mt-2">
-                                <small><strong>Student:</strong> {{ answer.submission.student.email }}</small>
                                 {% if answer.manual_feedback %}
-                                <div class="mt-1">
-                                    <small><strong>Feedback:</strong> {{ answer.manual_feedback|truncatewords:20 }}</small>
+                                <div class="mt-2 p-2 bg-light rounded">
+                                    <small><i class="bi bi-chat-quote"></i> {{ answer.manual_feedback|truncatewords:15 }}</small>
                                 </div>
                                 {% endif %}
                             </div>
+                            {% endfor %}
                         </div>
-                        {% endfor %}
-                    </div>
+                        
+                        <div class="text-center mt-3">
+                            <a href="{% url 'grading:submissions_list' %}?filter=graded" class="btn btn-sm btn-outline-info">
+                                View All Graded
+                            </a>
+                        </div>
                     {% else %}
-                    <div class="text-center py-4">
-                        <i class="bi bi-clock-history display-4 text-muted"></i>
-                        <p class="mt-3">No recent grading activity</p>
-                    </div>
+                        <div class="text-center py-4">
+                            <i class="bi bi-clock-history display-4 text-muted"></i>
+                            <p class="mt-3 text-muted">No recent grading activity</p>
+                        </div>
                     {% endif %}
                 </div>
             </div>
@@ -293,123 +334,119 @@
 
         <!-- Right Column: Quick Actions & Stats -->
         <div class="col-lg-4">
-            <!-- Grading Session Stats -->
+            <!-- Current Session Card -->
             <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Session Statistics</h5>
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-play-circle"></i> Grading Session</h5>
                 </div>
                 <div class="card-body">
                     {% if active_session %}
+                        <div class="mb-3">
+                            <h6>Session in Progress</h6>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Duration:</span>
+                                <strong id="sessionDuration">Calculating...</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Graded:</span>
+                                <strong>{{ active_session.submissions_graded }} submissions</strong>
+                            </div>
+                            {% if active_session.average_time_per_submission %}
+                            <div class="d-flex justify-content-between">
+                                <span>Avg Time:</span>
+                                <strong>{{ active_session.average_time_per_submission }}s per submission</strong>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <a href="{% url 'grading:submissions_list' %}?filter=pending" class="btn btn-warning">
+                                <i class="bi bi-hourglass-split"></i> Continue Grading
+                            </a>
+                        </div>
+                    {% else %}
+                        <p class="text-muted mb-3">No active grading session</p>
+                        <div class="d-grid gap-2">
+                            <a href="{% url 'grading:start_session' %}" class="btn btn-success">
+                                <i class="bi bi-play-circle"></i> Start New Session
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Quick Stats Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Quick Stats</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Overall Progress -->
                     <div class="mb-3">
-                        <h6>Current Session</h6>
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>Duration:</span>
-                            <strong id="sessionDuration">Calculating...</strong>
+                        <h6>Overall Progress</h6>
+                        {% with total_submissions=total_pending|add:total_graded %}
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>Completion:</span>
+                            <strong>
+                                {% if total_submissions > 0 %}
+                                    {% widthratio total_graded total_submissions 100 %}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </strong>
                         </div>
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>Submissions Graded:</span>
-                            <strong>{{ active_session.submissions_graded }}</strong>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-success" 
+                                 style="width: {% if total_submissions > 0 %}{% widthratio total_graded total_submissions 100 %}%{% else %}0{% endif %}">
+                            </div>
                         </div>
-                        {% if active_session.average_time_per_submission %}
-                        <div class="d-flex justify-content-between">
-                            <span>Avg Time/Submission:</span>
-                            <strong>{{ active_session.average_time_per_submission }}s</strong>
+                        <div class="d-flex justify-content-between mt-2 small">
+                            <span class="text-warning">Pending: {{ total_pending }}</span>
+                            <span class="text-success">Graded: {{ total_graded }}</span>
                         </div>
-                        {% endif %}
+                        {% endwith %}
+                    </div>
+
+                    <!-- Today's Activity -->
+                    {% if recent_grading %}
+                    <div class="mb-3">
+                        <h6>Today's Activity</h6>
+                        {% with today_count=recent_grading|length %}
+                        <p class="mb-0">
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            Graded {{ today_count }} answer{{ today_count|pluralize }} today
+                        </p>
+                        {% endwith %}
                     </div>
                     {% endif %}
-                    
-                    <div class="mb-3">
-                        <h6>Quick Start</h6>
-                        <div class="d-grid gap-2">
-                            <a href="{% url 'grading:start_session' %}" class="btn btn-primary">
-                                <i class="bi bi-play-fill"></i> Start New Session
-                            </a>
-                            <a href="{% url 'grading:submissions_list' %}" class="btn btn-outline-primary">
-                                <i class="bi bi-list-check"></i> View All Submissions
-                            </a>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <h6>Grading Tips</h6>
-                        <ul class="small text-muted">
-                            <li>Use rubrics for consistent grading</li>
-                            <li>Provide specific, constructive feedback</li>
-                            <li>Grade in batches for efficiency</li>
-                            <li>Take breaks during long sessions</li>
+
+                    <!-- Grading Tips -->
+                    <div class="small text-muted">
+                        <h6>Pro Tips:</h6>
+                        <ul class="ps-3 mb-0">
+                            <li>Use "Save & Next" for quick grading</li>
+                            <li>Add specific feedback for essays</li>
+                            <li>Take breaks every 30 minutes</li>
                         </ul>
                     </div>
                 </div>
             </div>
 
-            <!-- Exam Quick Links -->
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Your Exams</h5>
-                </div>
-                <div class="card-body">
-                    {% if total_exams > 0 %}
-                    <div class="list-group list-group-flush">
-                        {% for exam in pending_submissions|slice:":5" %}
-                        <a href="{% url 'grading:exam_submissions' exam.exam_id %}" 
-                           class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                            {{ exam.exam.title }}
-                            <span class="badge bg-warning rounded-pill">
-                                {{ exam.submission_set.count }}
-                            </span>
-                        </a>
-                        {% endfor %}
-                    </div>
-                    
-                    <div class="text-center mt-3">
-                        <a href="{% url 'exams:exam_list' %}" class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-eye"></i> View All Exams
-                        </a>
-                    </div>
-                    {% else %}
-                    <div class="text-center py-3">
-                        <i class="bi bi-journal-text display-4 text-muted"></i>
-                        <p class="mt-2">No exams created yet</p>
-                        <a href="{% url 'admin:exams_exam_add' %}" class="btn btn-sm btn-primary">
-                            Create First Exam
-                        </a>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Grading Progress -->
+            <!-- Bulk Actions Card -->
             <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Overall Progress</h5>
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-lightning"></i> Bulk Actions</h5>
                 </div>
                 <div class="card-body">
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span>Grading Completion</span>
-                            <span>
-                                {% if total_pending > 0 or total_graded > 0 %}
-                                    {% widthratio total_graded total_pending|add:total_graded 100 %}%
-                                {% else %}
-                                    0%
-                                {% endif %}
-                            </span>
-                        </div>
-                        <div class="progress" style="height: 10px;">
-                            <div class="progress-bar bg-success" 
-                                 style="width: {% if total_pending > 0 or total_graded > 0 %}{% widthratio total_graded total_pending|add:total_graded 100 %}%{% else %}0{% endif %}%">
-                            </div>
-                        </div>
-                        <div class="d-flex justify-content-between mt-2">
-                            <small class="text-muted">Pending: {{ total_pending }}</small>
-                            <small class="text-muted">Graded: {{ total_graded }}</small>
-                        </div>
-                    </div>
-                    
-                    <div class="text-center">
-                        <a href="{% url 'grading:bulk_grade' %}" class="btn btn-info btn-sm">
-                            <i class="bi bi-collection"></i> Try Bulk Grading
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'grading:bulk_overview' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-grid-3x3"></i> Bulk Grading
+                        </a>
+                        <a href="{% url 'grading:rubric_list' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-table"></i> Manage Rubrics
+                        </a>
+                        <a href="{% url 'exams:exam_list' %}" class="btn btn-outline-info">
+                            <i class="bi bi-journal"></i> View Exams
                         </a>
                     </div>
                 </div>
@@ -446,18 +483,29 @@ setInterval(updateSessionTimer, 1000);
 updateSessionTimer();
 {% endif %}
 
-// Auto-refresh pending submissions every 30 seconds
+// Auto-refresh for pending submissions
 setInterval(() => {
-    // Only refresh if on dashboard and not in the middle of something
     if (window.location.pathname === '/grading/' && !document.querySelector('.modal')) {
         fetch(window.location.href)
             .then(response => response.text())
             .then(html => {
                 const parser = new DOMParser();
                 const newDoc = parser.parseFromString(html, 'text/html');
+                
+                // Update pending submissions count
+                const newCount = newDoc.querySelector('.badge.bg-warning');
+                if (newCount) {
+                    const currentCount = document.querySelector('.badge.bg-warning');
+                    if (currentCount) {
+                        currentCount.textContent = newCount.textContent;
+                    }
+                }
+                
+                // Update table if exists
                 const newTable = newDoc.querySelector('.table-responsive');
-                if (newTable) {
-                    document.querySelector('.table-responsive').innerHTML = newTable.innerHTML;
+                const currentTable = document.querySelector('.table-responsive');
+                if (newTable && currentTable) {
+                    currentTable.innerHTML = newTable.innerHTML;
                 }
             })
             .catch(error => console.log('Auto-refresh failed:', error));
@@ -483,15 +531,19 @@ document.addEventListener('keydown', function(e) {
         e.preventDefault();
         window.location.href = "{% url 'grading:submissions_list' %}?filter=pending";
     }
+    
+    // Ctrl+B: Bulk grading
+    if (e.ctrlKey && e.key === 'b') {
+        e.preventDefault();
+        window.location.href = "{% url 'grading:bulk_overview' %}";
+    }
 });
 
-// Show keyboard shortcut help on first visit
-if (!localStorage.getItem('gradingShortcutsShown')) {
-    console.log('Grading Dashboard Keyboard Shortcuts:');
-    console.log('Ctrl+G: Go to grading dashboard');
-    console.log('Ctrl+S: Start new grading session');
-    console.log('Ctrl+P: View pending submissions');
-    localStorage.setItem('gradingShortcutsShown', 'true');
-}
+// Show keyboard shortcut help
+console.log('Grading Dashboard Keyboard Shortcuts:');
+console.log('Ctrl+G: Go to grading dashboard');
+console.log('Ctrl+S: Start new grading session');
+console.log('Ctrl+P: View pending submissions');
+console.log('Ctrl+B: Bulk grading');
 </script>
 {% endblock %}

@@ -1,5 +1,6 @@
 # apps/exams/views.py - Add these functions
 from django.shortcuts import render, get_object_or_404, redirect
+from django.http import HttpResponse, HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
@@ -253,3 +254,40 @@ def edit_exam(request, exam_id):
 def delete_exam(request, exam_id):
     messages.info(request, 'Delete functionality coming soon. Use admin panel for now.')
     return redirect('exams:exam_list')
+
+
+
+
+# Add to apps/exams/views.py - TEMPORARY DEBUG VIEW
+
+@login_required
+def debug_submissions(request):
+    """Debug view to check submissions (temporary)"""
+    if request.user.role not in ['INSTRUCTOR', 'ADMIN']:
+        return HttpResponseForbidden("Access denied")
+    
+    submissions = Submission.objects.filter(
+        exam__instructor=request.user
+    ).select_related('student', 'exam').order_by('-submitted_at')
+    
+    output = "<h1>Submissions Debug</h1>"
+    output += "<table border='1' cellpadding='5'>"
+    output += "<tr><th>ID</th><th>Student</th><th>Exam</th><th>Submitted</th><th>Graded</th><th>Status</th><th>Answers</th></tr>"
+    
+    for sub in submissions:
+        answers_count = sub.answers.count()
+        graded_answers = sub.answers.filter(points_awarded__isnull=False).count()
+        
+        output += f"<tr>"
+        output += f"<td>{sub.submission_id}</td>"
+        output += f"<td>{sub.student.email}</td>"
+        output += f"<td>{sub.exam.title}</td>"
+        output += f"<td>{'Yes' if sub.submitted_at else 'No'}</td>"
+        output += f"<td>{'Yes' if sub.is_graded else 'No'}</td>"
+        output += f"<td>{sub.grading_status}</td>"
+        output += f"<td>{answers_count} total, {graded_answers} graded</td>"
+        output += f"</tr>"
+    
+    output += "</table>"
+    
+    return HttpResponse(output)

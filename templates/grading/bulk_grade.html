@@ -1,90 +1,366 @@
 <!-- templates/grading/bulk_grade.html -->
 {% extends 'base.html' %}
+{% load grading_filters %}
 
 {% block title %}Bulk Grade - {{ exam.title }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    .bulk-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+    
+    .question-card {
+        border-left: 4px solid #007bff;
+        margin-bottom: 15px;
+        transition: all 0.2s;
+    }
+    
+    .question-card.active {
+        border-left-color: #28a745;
+        background-color: #f8f9fa;
+    }
+    
+    .grade-input {
+        width: 100px;
+        text-align: center;
+        margin: 0 auto;
+    }
+    
+    .student-row {
+        transition: background-color 0.2s;
+    }
+    
+    .student-row:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .student-row.graded {
+        background-color: #d4edda;
+    }
+    
+    .student-row.partial {
+        background-color: #fff3cd;
+    }
+    
+    .sticky-header {
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 10;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .sticky-col {
+        position: sticky;
+        left: 0;
+        background: white;
+        z-index: 5;
+        box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+    }
+    
+    .score-badge {
+        font-size: 0.9rem;
+        padding: 5px 10px;
+    }
+    
+    .progress-sm {
+        height: 5px;
+        width: 100px;
+        margin: 5px auto;
+    }
+    
+    .quick-actions {
+        position: sticky;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+    }
+    
+    .floating-save-btn {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        box-shadow: 0 4px 12px rgba(0,123,255,0.3);
+        border-radius: 50px;
+        padding: 12px 25px;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+    
+    .filter-badge {
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .filter-badge:hover {
+        transform: scale(1.1);
+    }
+    
+    .filter-badge.active {
+        background-color: #007bff;
+        color: white;
+        border-color: #007bff;
+    }
+    
+    .keyboard-shortcut {
+        font-family: monospace;
+        background: #e9ecef;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+    }
+    
+    .btn-xs {
+        padding: 0.125rem 0.25rem;
+        font-size: 0.7rem;
+    }
+    
+    .table td, .table th {
+        vertical-align: middle;
+    }
+    
+    .grade-input:focus {
+        box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
+        border-color: #80bdff;
+    }
+    
+    .grade-input[value=""] {
+        border-color: #dc3545;
+    }
+    
+    @media print {
+        .btn, .filter-badge, .floating-save-btn, .quick-actions {
+            display: none !important;
+        }
+        .table {
+            border: 1px solid #000;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container mt-4">
+<div class="container-fluid">
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1>Bulk Grading</h1>
-            <p class="text-muted">
-                Exam: <strong>{{ exam.title }}</strong> | 
-                Submissions: <strong>{{ submissions|length }}</strong>
-            </p>
-        </div>
-        <div>
-            <a href="{% url 'grading:submissions_list' exam_id=exam.exam_id %}" class="btn btn-outline-secondary">
-                Back to List
-            </a>
-            <button type="submit" form="bulkGradeForm" class="btn btn-success">
-                Save All Grades
-            </button>
+    <div class="bulk-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="text-white mb-2">
+                    <i class="bi bi-grid-3x3"></i> Bulk Grading: {{ exam.title }}
+                </h2>
+                <p class="text-white-50 mb-0">
+                    <i class="bi bi-people"></i> {{ submissions|length }} submissions | 
+                    <i class="bi bi-question-circle"></i> {{ questions|length }} questions
+                    {% if exam.total_points %}
+                    | <i class="bi bi-trophy"></i> {{ exam.total_points }} total points
+                    {% endif %}
+                </p>
+            </div>
+            <div>
+                <a href="{% url 'grading:bulk_overview' %}" class="btn btn-light me-2">
+                    <i class="bi bi-arrow-left"></i> Back
+                </a>
+                <button type="submit" form="bulkGradeForm" class="btn btn-success btn-lg">
+                    <i class="bi bi-save"></i> Save All
+                </button>
+            </div>
         </div>
     </div>
-    
-    <!-- Instructions -->
-    <div class="alert alert-info">
-        <i class="bi bi-info-circle"></i>
-        <strong>How to use bulk grading:</strong> Enter scores for each student and question. 
-        You can use tab to navigate between fields quickly.
+
+    <!-- Quick Stats Row -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Total Submissions</h6>
+                            <h2 class="mb-0">{{ submissions|length }}</h2>
+                        </div>
+                        <i class="bi bi-people display-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Questions</h6>
+                            <h2 class="mb-0">{{ questions|length }}</h2>
+                        </div>
+                        <i class="bi bi-question-circle display-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card text-white bg-info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Total Points</h6>
+                            <h2 class="mb-0">{{ exam.total_points }}</h2>
+                        </div>
+                        <i class="bi bi-trophy display-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Avg per Student</h6>
+                            <h2 class="mb-0">{{ exam.total_points|floatformat:0 }}</h2>
+                        </div>
+                        <i class="bi bi-calculator display-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    
+
+    <!-- Question Filter Tabs -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-funnel"></i> Filter by Question</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-outline-primary filter-badge active" data-question="all" onclick="filterByQuestion('all')">
+                            All Questions
+                        </button>
+                        {% for question in questions %}
+                        <button class="btn btn-outline-primary filter-badge" 
+                                data-question="{{ question.question_id }}"
+                                data-points="{{ question.points }}"
+                                onclick="filterByQuestion('{{ question.question_id }}')">
+                            Q{{ question.position }} ({{ question.points }} pts)
+                            <br>
+                            <small>{{ question.get_question_type_display }}</small>
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bulk Grading Form -->
     <form method="post" id="bulkGradeForm">
         {% csrf_token %}
         
+        {% if submissions %}
         <div class="card">
-            <div class="card-body">
-                {% if submissions %}
+            <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-bordered table-hover">
-                        <thead class="table-light sticky-top" style="top: 0;">
+                    <table class="table table-bordered table-hover mb-0" id="gradingTable">
+                        <thead class="sticky-header">
                             <tr>
-                                <th style="position: sticky; left: 0; background: white; z-index: 2;">Student</th>
+                                <th class="sticky-col" style="min-width: 250px;">
+                                    <i class="bi bi-person"></i> Student
+                                </th>
                                 {% for question in questions %}
-                                <th class="text-center" style="min-width: 120px;">
-                                    Q{{ question.position }}<br>
-                                    <small class="text-muted">{{ question.points }} pts</small>
+                                <th class="text-center question-header" 
+                                    data-question="{{ question.question_id }}"
+                                    style="min-width: 120px;">
+                                    <div>Q{{ question.position }}</div>
+                                    <small class="text-muted">{{ question.get_question_type_display }}</small>
+                                    <div class="mt-1">
+                                        <span class="badge bg-info">{{ question.points }} pts</span>
+                                    </div>
+                                    <!-- Quick fill buttons for this column -->
+                                    <div class="btn-group btn-group-sm mt-2">
+                                        <button type="button" class="btn btn-outline-success btn-xs" 
+                                                onclick="fillColumn('{{ question.question_id }}', 'full', {{ question.points }})"
+                                                title="Fill all with full points">
+                                            Full
+                                        </button>
+                                        <button type="button" class="btn btn-outline-warning btn-xs" 
+                                                onclick="fillColumn('{{ question.question_id }}', 'half', {{ question.points }})"
+                                                title="Fill all with half points">
+                                            50%
+                                        </button>
+                                        <button type="button" class="btn btn-outline-danger btn-xs" 
+                                                onclick="fillColumn('{{ question.question_id }}', 'zero', {{ question.points }})"
+                                                title="Fill all with zero">
+                                            0
+                                        </button>
+                                    </div>
                                 </th>
                                 {% endfor %}
-                                <th class="text-center">Total</th>
+                                <th class="text-center" style="min-width: 100px; background-color: #e9ecef;">
+                                    <i class="bi bi-trophy"></i> Total
+                                    <br>
+                                    <small class="text-muted">/{{ exam.total_points }}</small>
+                                </th>
+                                <th style="min-width: 80px; background-color: #e9ecef;">Status</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for submission in submissions %}
-                            <tr>
-                                <td style="position: sticky; left: 0; background: white; z-index: 1;">
-                                    <strong>{{ submission.student.email }}</strong>
-                                    <br>
+                            {% for item in grading_data %}
+                            <tr class="student-row" data-student="{{ item.submission.student.email }}">
+                                <td class="sticky-col">
+                                    <strong>{{ item.submission.student.email|truncatechars:25 }}</strong>
+                                    {% if item.submission.student.get_full_name %}
+                                        <br>
+                                        <small class="text-muted">{{ item.submission.student.get_full_name|truncatechars:20 }}</small>
+                                    {% endif %}
+                                    
+                                    <!-- Progress for this student -->
+                                    {% with total_questions=questions|length %}
+                                    {% with graded_count=item.submission.graded_answers|default:0 %}
+                                    <div class="progress progress-sm mt-2">
+                                        <div class="progress-bar bg-{% if graded_count == total_questions %}success{% else %}warning{% endif %}" 
+                                             style="width: {% widthratio graded_count total_questions 100 %}%">
+                                        </div>
+                                    </div>
                                     <small class="text-muted">
-                                        {% if submission.is_graded %}
-                                        <span class="badge bg-success">Graded</span>
-                                        {% else %}
-                                        <span class="badge bg-warning">Pending</span>
-                                        {% endif %}
+                                        {{ graded_count }}/{{ total_questions }} graded
                                     </small>
+                                    {% endwith %}
+                                    {% endwith %}
                                 </td>
                                 
                                 {% for question in questions %}
-                                <td class="text-center">
-                                    {% with answer=submission.answers|get_question_answer:question %}
+                                <td class="text-center question-col" data-question="{{ question.question_id }}">
+                                    {% with answer=item.answers|get_item:question.question_id %}
                                     <input type="number" 
-                                           name="points_{{ answer.answer_id|default:question.question_id }}_{{ submission.submission_id }}"
-                                           class="form-control form-control-sm text-center" 
+                                           name="points_{{ answer.answer_id|default:'' }}_{{ question.question_id }}_{{ item.submission.submission_id }}"
+                                           class="form-control form-control-sm grade-input mx-auto" 
                                            min="0" 
                                            max="{{ question.points }}" 
                                            step="0.5"
                                            value="{{ answer.points_awarded|default:'' }}"
                                            placeholder="0-{{ question.points }}"
-                                           style="min-width: 80px;">
+                                           data-student="{{ item.submission.student.email }}"
+                                           data-question="{{ question.question_id }}"
+                                           onchange="updateRowStatus(this, '{{ item.submission.submission_id }}')">
+                                    
                                     {% if answer %}
                                     <small class="text-muted d-block">
                                         {% if answer.points_awarded %}
-                                        <span class="text-success">✓</span>
+                                            <span class="badge bg-success mt-1">✓</span>
                                         {% else %}
-                                        <span class="text-warning">✗</span>
+                                            <span class="badge bg-secondary mt-1">Not graded</span>
                                         {% endif %}
                                     </small>
                                     {% endif %}
@@ -92,140 +368,457 @@
                                 </td>
                                 {% endfor %}
                                 
-                                <td class="text-center">
-                                    <strong class="text-primary">
-                                        {{ submission.total_score|default:"-" }}/{{ exam.total_points }}
+                                <td class="text-center align-middle" style="background-color: #f8f9fa;">
+                                    <strong class="text-primary total-score" id="total-{{ item.submission.submission_id }}">
+                                        {{ item.submission.total_score|default:"0" }}
                                     </strong>
+                                    <small class="text-muted">/{{ exam.total_points }}</small>
+                                    
+                                    <!-- Percentage -->
+                                    {% if exam.total_points > 0 %}
+                                    <br>
+                                    <small class="text-muted">
+                                        {% widthratio item.submission.total_score|default:0 exam.total_points 100 %}%
+                                    </small>
+                                    {% endif %}
+                                </td>
+                                
+                                <td class="text-center" style="background-color: #f8f9fa;">
+                                    <span class="badge 
+                                        {% if item.submission.is_graded %}bg-success
+                                        {% elif item.submission.grading_status == 'PARTIALLY_GRADED' %}bg-warning
+                                        {% else %}bg-secondary{% endif %} 
+                                        status-badge" id="status-{{ item.submission.submission_id }}">
+                                        {{ item.submission.get_grading_status_display }}
+                                    </span>
                                 </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
-                
-                <!-- Quick Actions -->
-                <div class="card mt-4">
-                    <div class="card-header">
-                        <h5 class="mb-0">Quick Actions</h5>
+            </div>
+        </div>
+        
+        <!-- Quick Actions Panel -->
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-lightning"></i> Quick Fill Options</h5>
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <button type="button" class="btn btn-outline-secondary w-100" 
-                                        onclick="fillColumn(0)">
-                                    Fill Column with 0
+                            <div class="col-md-4 mb-2">
+                                <button type="button" class="btn btn-outline-success w-100" onclick="fillAll('full')">
+                                    <i class="bi bi-star-fill"></i> All Full Points
                                 </button>
                             </div>
-                            <div class="col-md-4 mb-3">
-                                <button type="button" class="btn btn-outline-secondary w-100"
-                                        onclick="fillColumn('max')">
-                                    Fill Column with Max
+                            <div class="col-md-4 mb-2">
+                                <button type="button" class="btn btn-outline-warning w-100" onclick="fillAll('half')">
+                                    <i class="bi bi-star-half"></i> All Half Points
                                 </button>
                             </div>
-                            <div class="col-md-4 mb-3">
-                                <button type="button" class="btn btn-outline-secondary w-100"
-                                        onclick="clearAll()">
-                                    Clear All
+                            <div class="col-md-4 mb-2">
+                                <button type="button" class="btn btn-outline-danger w-100" onclick="fillAll('zero')">
+                                    <i class="bi bi-star"></i> All Zero
+                                </button>
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <button type="button" class="btn btn-outline-secondary w-100" onclick="clearAllGrades()">
+                                    <i class="bi bi-eraser"></i> Clear All
+                                </button>
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <button type="button" class="btn btn-outline-info w-100" onclick="showGradedOnly()">
+                                    <i class="bi bi-eye"></i> Show Graded Only
+                                </button>
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <button type="button" class="btn btn-outline-info w-100" onclick="showAll()">
+                                    <i class="bi bi-eye-fill"></i> Show All
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="bi bi-people text-muted" style="font-size: 4rem;"></i>
-                    <h3 class="mt-3">No Submissions to Grade</h3>
-                    <p class="text-muted">There are no submissions for this exam yet.</p>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="bi bi-keyboard"></i> Keyboard Shortcuts</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <p><span class="keyboard-shortcut">Ctrl+S</span> Save all grades</p>
+                                <p><span class="keyboard-shortcut">Ctrl+F</span> Fill all full points</p>
+                                <p><span class="keyboard-shortcut">Ctrl+H</span> Fill all half points</p>
+                            </div>
+                            <div class="col-6">
+                                <p><span class="keyboard-shortcut">Ctrl+Z</span> Fill all zero</p>
+                                <p><span class="keyboard-shortcut">Tab</span> Next field</p>
+                                <p><span class="keyboard-shortcut">Enter</span> Save and next</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                {% endif %}
             </div>
         </div>
-    </form>
-    
-    <!-- Grading Notes -->
-    {% if questions %}
-    <div class="card mt-4">
-        <div class="card-header">
-            <h5 class="mb-0">Question Details</h5>
+        
+        {% else %}
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-people text-muted" style="font-size: 4rem;"></i>
+                <h3 class="mt-3">No Submissions to Grade</h3>
+                <p class="text-muted">There are no submissions for this exam yet.</p>
+                <a href="{% url 'grading:bulk_overview' %}" class="btn btn-primary">
+                    <i class="bi bi-arrow-left"></i> Back to Overview
+                </a>
+            </div>
         </div>
-        <div class="card-body">
-            <div class="row">
-                {% for question in questions %}
-                <div class="col-md-6 mb-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <h6>Q{{ question.position }}: {{ question.get_question_type_display }}</h6>
-                            <p class="small text-muted">{{ question.question_text|truncatewords:20 }}</p>
-                            {% if question.grading_instructions %}
-                            <div class="alert alert-info small mb-0">
-                                <strong>Instructions:</strong> {{ question.grading_instructions }}
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
+        {% endif %}
+    </form>
+
+    <!-- Floating Save Button (visible on scroll) -->
+    <div class="quick-actions floating-save-btn">
+        <button type="submit" form="bulkGradeForm" class="btn btn-primary btn-lg">
+            <i class="bi bi-save"></i> Save All Grades
+        </button>
+    </div>
+</div>
+
+<!-- Question Details Modal -->
+<div class="modal fade" id="questionDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Question Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="questionDetailsContent">
+                <!-- Filled by JavaScript -->
             </div>
         </div>
     </div>
-    {% endif %}
 </div>
 
 <script>
-// JavaScript for bulk grading helpers
-function fillColumn(value) {
-    const inputs = document.querySelectorAll('input[type="number"]');
-    inputs.forEach(input => {
-        if (value === 'max') {
-            input.value = input.max;
+// =============================================
+// Bulk Grading JavaScript
+// =============================================
+
+// Store all grade inputs
+let gradeInputs = [];
+let formChanged = false;
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    gradeInputs = document.querySelectorAll('.grade-input');
+    
+    // Add event listeners for real-time updates
+    gradeInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            updateTotals();
+            formChanged = true;
+        });
+        input.addEventListener('keydown', handleEnterKey);
+        input.addEventListener('change', function() { formChanged = true; });
+    });
+    
+    // Add question header double-click for details
+    document.querySelectorAll('.question-header').forEach(header => {
+        header.addEventListener('dblclick', function() {
+            showQuestionDetails(this.dataset.question);
+        });
+    });
+    
+    // Initial totals calculation
+    updateTotals();
+});
+
+// Handle Enter key for quick navigation
+function handleEnterKey(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const inputs = Array.from(gradeInputs);
+        const currentIndex = inputs.indexOf(e.target);
+        const nextIndex = currentIndex + 1;
+        
+        if (nextIndex < inputs.length) {
+            inputs[nextIndex].focus();
+            inputs[nextIndex].select();
         } else {
-            input.value = value;
+            // Submit form if at the end
+            if (confirm('Save all grades and submit?')) {
+                document.getElementById('bulkGradeForm').submit();
+            }
+        }
+    }
+}
+
+// Update totals for all students
+function updateTotals() {
+    const rows = document.querySelectorAll('.student-row');
+    
+    rows.forEach(row => {
+        const inputs = row.querySelectorAll('.grade-input');
+        let total = 0;
+        
+        inputs.forEach(input => {
+            const value = parseFloat(input.value) || 0;
+            total += value;
+        });
+        
+        const totalCell = row.querySelector('.total-score');
+        if (totalCell) {
+            totalCell.textContent = total.toFixed(1);
+        }
+        
+        // Update status badge
+        updateRowStatusFromInputs(row);
+    });
+}
+
+// Update individual row status
+function updateRowStatus(input, submissionId) {
+    const row = input.closest('tr');
+    updateRowStatusFromInputs(row);
+}
+
+function updateRowStatusFromInputs(row) {
+    const inputs = row.querySelectorAll('.grade-input');
+    let filledCount = 0;
+    let totalQuestions = inputs.length;
+    
+    inputs.forEach(input => {
+        if (input.value !== '') {
+            filledCount++;
+        }
+    });
+    
+    const statusBadge = row.querySelector('.status-badge');
+    if (statusBadge) {
+        if (filledCount === totalQuestions && totalQuestions > 0) {
+            statusBadge.className = 'badge bg-success status-badge';
+            statusBadge.textContent = 'MANUALLY_GRADED';
+            row.classList.add('graded');
+            row.classList.remove('partial');
+        } else if (filledCount > 0) {
+            statusBadge.className = 'badge bg-warning status-badge';
+            statusBadge.textContent = 'PARTIALLY_GRADED';
+            row.classList.add('partial');
+            row.classList.remove('graded');
+        } else {
+            statusBadge.className = 'badge bg-secondary status-badge';
+            statusBadge.textContent = 'PENDING';
+            row.classList.remove('graded', 'partial');
+        }
+    }
+}
+
+// Filter by question
+function filterByQuestion(questionId) {
+    // Update active state
+    document.querySelectorAll('.filter-badge').forEach(b => {
+        b.classList.remove('active');
+    });
+    event.target.closest('.filter-badge').classList.add('active');
+    
+    const questionCols = document.querySelectorAll('.question-col');
+    const questionHeaders = document.querySelectorAll('.question-header');
+    
+    if (questionId === 'all') {
+        // Show all columns
+        questionCols.forEach(col => {
+            col.style.display = 'table-cell';
+        });
+        questionHeaders.forEach(header => {
+            header.style.display = 'table-cell';
+        });
+    } else {
+        // Show only selected question column
+        questionCols.forEach(col => {
+            if (col.dataset.question === questionId) {
+                col.style.display = 'table-cell';
+            } else {
+                col.style.display = 'none';
+            }
+        });
+        questionHeaders.forEach(header => {
+            if (header.dataset.question === questionId) {
+                header.style.display = 'table-cell';
+            } else {
+                header.style.display = 'none';
+            }
+        });
+    }
+}
+
+// Fill entire column
+function fillColumn(questionId, type, maxPoints) {
+    const inputs = document.querySelectorAll(`.grade-input[data-question="${questionId}"]`);
+    
+    inputs.forEach(input => {
+        if (type === 'full') {
+            input.value = maxPoints;
+        } else if (type === 'half') {
+            input.value = (maxPoints / 2).toFixed(1);
+        } else if (type === 'zero') {
+            input.value = '0';
+        }
+    });
+    
+    updateTotals();
+    formChanged = true;
+}
+
+// Fill all inputs
+function fillAll(type) {
+    gradeInputs.forEach(input => {
+        const maxPoints = parseFloat(input.max);
+        if (type === 'full') {
+            input.value = maxPoints;
+        } else if (type === 'half') {
+            input.value = (maxPoints / 2).toFixed(1);
+        } else if (type === 'zero') {
+            input.value = '0';
+        }
+    });
+    
+    updateTotals();
+    formChanged = true;
+}
+
+// Clear all grades
+function clearAllGrades() {
+    if (confirm('Clear all grades? This action cannot be undone.')) {
+        gradeInputs.forEach(input => {
+            input.value = '';
+        });
+        updateTotals();
+        formChanged = true;
+    }
+}
+
+// Show only graded submissions
+function showGradedOnly() {
+    document.querySelectorAll('.student-row').forEach(row => {
+        const status = row.querySelector('.status-badge').textContent;
+        if (status === 'MANUALLY_GRADED' || status === 'PARTIALLY_GRADED') {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
         }
     });
 }
 
-function clearAll() {
-    const inputs = document.querySelectorAll('input[type="number"]');
-    inputs.forEach(input => {
-        input.value = '';
+// Show all submissions
+function showAll() {
+    document.querySelectorAll('.student-row').forEach(row => {
+        row.style.display = '';
     });
 }
 
-// Auto-focus and tab navigation
-document.addEventListener('DOMContentLoaded', function() {
-    const inputs = document.querySelectorAll('input[type="number"]');
-    inputs.forEach((input, index) => {
-        input.addEventListener('keydown', function(e) {
-            if (e.key === 'Tab') {
-                // Let default tab behavior
-                return;
-            }
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                const nextIndex = index + 1;
-                if (nextIndex < inputs.length) {
-                    inputs[nextIndex].focus();
-                    inputs[nextIndex].select();
-                }
-            }
-        });
-    });
+// Show question details
+function showQuestionDetails(questionId) {
+    // Find question data from the page
+    const questions = [
+        {% for question in questions %}
+        {
+            id: "{{ question.question_id }}",
+            position: {{ question.position }},
+            text: "{{ question.question_text|escapejs }}",
+            type: "{{ question.get_question_type_display }}",
+            points: {{ question.points }},
+            instructions: "{{ question.grading_instructions|default:''|escapejs }}"
+        },
+        {% endfor %}
+    ];
+    
+    const question = questions.find(q => q.id === questionId);
+    if (!question) return;
+    
+    const content = `
+        <h6>Question ${question.position}: ${question.type}</h6>
+        <p><strong>Points:</strong> ${question.points}</p>
+        <div class="mb-3">
+            <strong>Question Text:</strong>
+            <div class="p-3 bg-light rounded">${question.text}</div>
+        </div>
+        ${question.instructions ? `
+        <div class="mb-3">
+            <strong>Grading Instructions:</strong>
+            <div class="p-3 bg-info text-white rounded">${question.instructions}</div>
+        </div>
+        ` : ''}
+    `;
+    
+    document.getElementById('questionDetailsContent').innerHTML = content;
+    new bootstrap.Modal(document.getElementById('questionDetailsModal')).show();
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl+S: Save
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        document.getElementById('bulkGradeForm').submit();
+    }
+    
+    // Ctrl+F: Fill all full points
+    if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        fillAll('full');
+    }
+    
+    // Ctrl+H: Fill all half points
+    if (e.ctrlKey && e.key === 'h') {
+        e.preventDefault();
+        fillAll('half');
+    }
+    
+    // Ctrl+Z: Fill all zero
+    if (e.ctrlKey && e.key === 'z') {
+        e.preventDefault();
+        fillAll('zero');
+    }
+    
+    // Ctrl+Shift+G: Show only graded
+    if (e.ctrlKey && e.shiftKey && e.key === 'G') {
+        e.preventDefault();
+        showGradedOnly();
+    }
+    
+    // Ctrl+Shift+A: Show all
+    if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+        e.preventDefault();
+        showAll();
+    }
 });
-</script>
 
-<style>
-.table thead th {
-    position: sticky;
-    top: 0;
-    background: white;
-    z-index: 10;
-}
-.table tbody th {
-    position: sticky;
-    left: 0;
-    background: white;
-    z-index: 1;
-}
-</style>
+// Warn before leaving with unsaved changes
+window.addEventListener('beforeunload', function(e) {
+    if (formChanged) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved grades. Are you sure you want to leave?';
+        return e.returnValue;
+    }
+});
+
+// Remove warning on form submit
+document.getElementById('bulkGradeForm').addEventListener('submit', function() {
+    formChanged = false;
+});
+
+console.log('Bulk Grading Keyboard Shortcuts:');
+console.log('Ctrl+S: Save all grades');
+console.log('Ctrl+F: Fill all full points');
+console.log('Ctrl+H: Fill all half points');
+console.log('Ctrl+Z: Fill all zero');
+console.log('Ctrl+Shift+G: Show graded only');
+console.log('Ctrl+Shift+A: Show all');
+console.log('Enter: Save and move to next field');
+</script>
 {% endblock %}
