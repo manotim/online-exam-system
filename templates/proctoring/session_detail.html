@@ -1,254 +1,310 @@
+<!-- templates/proctoring/session_detail.html -->
 {% extends 'base.html' %}
 
 {% block title %}Proctoring Session: {{ session.student.email }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    .timeline {
+        position: relative;
+        padding: 20px 0;
+    }
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 20px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #dee2e6;
+    }
+    .timeline-item {
+        position: relative;
+        padding-left: 50px;
+        margin-bottom: 20px;
+    }
+    .timeline-marker {
+        position: absolute;
+        left: 12px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #6c757d;
+        border: 3px solid white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .timeline-marker.high {
+        background: #dc3545;
+    }
+    .timeline-marker.medium {
+        background: #ffc107;
+    }
+    .timeline-marker.low {
+        background: #17a2b8;
+    }
+    .timeline-content {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+    }
+    .evidence-highlight {
+        background: #fff3cd;
+        border-left: 4px solid #ffc107;
+        padding: 15px;
+        margin: 10px 0;
+    }
+    .screenshot-gallery {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 10px;
+        margin-top: 20px;
+    }
+    .screenshot-gallery-item {
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        overflow: hidden;
+        cursor: pointer;
+        position: relative;
+    }
+    .screenshot-gallery-item.flagged {
+        border: 3px solid #dc3545;
+    }
+    .screenshot-gallery-item img {
+        width: 100%;
+        height: 120px;
+        object-fit: cover;
+    }
+    .screenshot-timestamp {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0,0,0,0.7);
+        color: white;
+        padding: 2px 5px;
+        font-size: 0.7rem;
+        text-align: center;
+    }
+    .severity-meter {
+        height: 20px;
+        background: linear-gradient(to right, #28a745, #ffc107, #dc3545);
+        border-radius: 10px;
+        position: relative;
+        margin: 10px 0;
+    }
+    .severity-indicator {
+        width: 10px;
+        height: 30px;
+        background: black;
+        position: absolute;
+        top: -5px;
+        border-radius: 5px;
+        transform: translateX(-5px);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
+    <!-- Header -->
     <div class="row mb-4">
-        <div class="col-12">
+        <div class="col">
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{% url 'proctoring:dashboard' %}">Proctoring Dashboard</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'proctoring:session_list' %}">All Sessions</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Session Details</li>
+                    <li class="breadcrumb-item"><a href="{% url 'proctoring:dashboard' %}">Proctoring</a></li>
+                    <li class="breadcrumb-item active">Session Details</li>
                 </ol>
             </nav>
-            <h1>Proctoring Session Details</h1>
-            <p class="text-muted">Exam: {{ session.submission.exam.title }}</p>
+            <h1>Proctoring Session Review</h1>
         </div>
     </div>
-    
-    <!-- Session Info Card -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="card">
+
+    <!-- Session Summary -->
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Student Information</h5>
+                    <h5>Session Information</h5>
                 </div>
                 <div class="card-body">
-                    <dl class="row">
-                        <dt class="col-sm-4">Student:</dt>
-                        <dd class="col-sm-8">{{ session.student.email }}</dd>
-                        
-                        <dt class="col-sm-4">Exam:</dt>
-                        <dd class="col-sm-8">{{ session.submission.exam.title }}</dd>
-                        
-                        <dt class="col-sm-4">Start Time:</dt>
-                        <dd class="col-sm-8">{{ session.start_time|date:"M d, Y H:i:s" }}</dd>
-                        
-                        <dt class="col-sm-4">End Time:</dt>
-                        <dd class="col-sm-8">{{ session.end_time|date:"M d, Y H:i:s"|default:"Still active" }}</dd>
-                        
-                        <dt class="col-sm-4">Duration:</dt>
-                        <dd class="col-sm-8">
-                            {% if session.end_time %}
-                                {{ session.end_time|timesince:session.start_time }}
-                            {% else %}
-                                {{ session.start_time|timesince }} and counting
-                            {% endif %}
-                        </dd>
-                    </dl>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Browser Information & Status</h5>
-                </div>
-                <div class="card-body">
-                    <dl class="row">
-                        <dt class="col-sm-4">Browser:</dt>
-                        <dd class="col-sm-8">{{ session.browser_name }} {{ session.browser_version }}</dd>
-                        
-                        <dt class="col-sm-4">OS:</dt>
-                        <dd class="col-sm-8">{{ session.os_info }}</dd>
-                        
-                        <dt class="col-sm-4">Resolution:</dt>
-                        <dd class="col-sm-8">{{ session.screen_resolution }}</dd>
-                        
-                        <dt class="col-sm-4">Fullscreen:</dt>
-                        <dd class="col-sm-8">
-                            {% if session.is_fullscreen %}
-                                <span class="badge bg-success">Yes</span>
-                            {% else %}
-                                <span class="badge bg-warning">No</span>
-                            {% endif %}
-                        </dd>
-                        
-                        <dt class="col-sm-4">Status:</dt>
-                        <dd class="col-sm-8">
-                            <span class="badge bg-{% if session.status == 'ACTIVE' %}primary{% elif session.status == 'FLAGGED' %}danger{% else %}success{% endif %}">
-                                {{ session.get_status_display }}
-                            </span>
-                            {% if request.user.role in 'INSTRUCTOR,ADMIN' and session.status != 'COMPLETED' %}
-                            <button class="btn btn-sm btn-outline-secondary ms-2" data-bs-toggle="modal" data-bs-target="#statusModal">
-                                Change
-                            </button>
-                            {% endif %}
-                        </dd>
-                    </dl>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Activity Stats -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Activity Statistics</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row text-center">
-                        <div class="col-md-3">
-                            <div class="card border-primary">
-                                <div class="card-body">
-                                    <h2 class="text-primary">{{ session.tab_switch_count }}</h2>
-                                    <p class="mb-0">Tab Switches</p>
-                                </div>
-                            </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-sm">
+                                <tr>
+                                    <th>Student:</th>
+                                    <td>{{ session.student.email }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Exam:</th>
+                                    <td>{{ session.submission.exam.title }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Started:</th>
+                                    <td>{{ session.start_time|date:"F d, Y H:i:s" }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Ended:</th>
+                                    <td>
+                                        {% if session.end_time %}
+                                            {{ session.end_time|date:"F d, Y H:i:s" }}
+                                        {% else %}
+                                            <span class="badge bg-warning">In Progress</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </table>
                         </div>
-                        <div class="col-md-3">
-                            <div class="card border-warning">
-                                <div class="card-body">
-                                    <h2 class="text-warning">{{ session.focus_loss_count }}</h2>
-                                    <p class="mb-0">Focus Loss</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="card border-danger">
-                                <div class="card-body">
-                                    <h2 class="text-danger">{{ session.copy_paste_attempts }}</h2>
-                                    <p class="mb-0">Copy/Paste Attempts</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="card border-info">
-                                <div class="card-body">
-                                    <h2 class="text-info">{{ session.screenshot_count }}</h2>
-                                    <p class="mb-0">Screenshots</p>
-                                </div>
-                            </div>
+                        <div class="col-md-6">
+                            <table class="table table-sm">
+                                <tr>
+                                    <th>Status:</th>
+                                    <td>
+                                        <span class="badge {% if session.status == 'FLAGGED' %}bg-danger{% elif session.status == 'ACTIVE' %}bg-warning{% elif session.status == 'REVIEWED' %}bg-secondary{% else %}bg-success{% endif %}">
+                                            {{ session.status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Browser:</th>
+                                    <td>{{ session.browser_name }} {{ session.browser_version }}</td>
+                                </tr>
+                                <tr>
+                                    <th>OS:</th>
+                                    <td>{{ session.os_info }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Resolution:</th>
+                                    <td>{{ session.screen_resolution }}</td>
+                                </tr>
+                            </table>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-    
-    <!-- Tabs for Activities and Screenshots -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
+
+            <!-- Violation Summary -->
+            <div class="card mb-4">
                 <div class="card-header">
-                    <ul class="nav nav-tabs card-header-tabs" id="sessionTab" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="activities-tab" data-bs-toggle="tab" 
-                                    data-bs-target="#activities" type="button" role="tab">
-                                Suspicious Activities ({{ activities|length }})
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="screenshots-tab" data-bs-toggle="tab" 
-                                    data-bs-target="#screenshots" type="button" role="tab">
-                                Screenshots ({{ screenshots|length }})
-                            </button>
-                        </li>
-                    </ul>
+                    <h5>Violation Summary</h5>
                 </div>
                 <div class="card-body">
-                    <div class="tab-content" id="sessionTabContent">
-                        <!-- Activities Tab -->
-                        <div class="tab-pane fade show active" id="activities" role="tabpanel">
-                            {% if activities %}
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>Time</th>
-                                            <th>Activity Type</th>
-                                            <th>Details</th>
-                                            <th>Screenshot</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for activity in activities %}
-                                        <tr>
-                                            <td>{{ activity.timestamp|date:"H:i:s" }}</td>
-                                            <td>
-                                                <span class="badge bg-{% if activity.activity_type == 'TAB_SWITCH' or activity.activity_type == 'WINDOW_BLUR' %}warning{% else %}danger{% endif %}">
-                                                    {{ activity.get_activity_type_display }}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <small>
-                                                    {% if activity.details %}
-                                                        {% for key, value in activity.details.items %}
-                                                            {{ key }}: {{ value }}<br>
-                                                        {% endfor %}
-                                                    {% else %}
-                                                        No details
-                                                    {% endif %}
-                                                </small>
-                                            </td>
-                                            <td>
-                                                {% if activity.screenshot_taken %}
-                                                    <span class="badge bg-success">Yes</span>
-                                                {% else %}
-                                                    <span class="badge bg-secondary">No</span>
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                            {% else %}
-                            <div class="alert alert-info">
-                                <i class="bi bi-info-circle"></i>
-                                No suspicious activities recorded for this session.
-                            </div>
-                            {% endif %}
+                    <div class="row">
+                        <div class="col-md-3 text-center">
+                            <h2 class="{% if session.tab_switch_count > 5 %}text-danger{% endif %}">{{ session.tab_switch_count }}</h2>
+                            <p>Tab Switches</p>
                         </div>
-                        
-                        <!-- Screenshots Tab -->
-                        <div class="tab-pane fade" id="screenshots" role="tabpanel">
-                            {% if screenshots %}
-                            <div class="row">
-                                {% for screenshot in screenshots %}
-                                <div class="col-md-4 mb-3">
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <h6 class="card-title">
-                                                {{ screenshot.timestamp|date:"H:i:s" }}
-                                                {% if screenshot.is_flagged %}
-                                                <span class="badge bg-danger float-end">Flagged</span>
-                                                {% endif %}
-                                            </h6>
-                                            <p class="card-text small text-muted">
-                                                {{ screenshot.reason }}
-                                            </p>
-                                            <a href="{% url 'proctoring:get_screenshot' screenshot.screenshot_id %}" 
-                                               target="_blank" class="btn btn-sm btn-outline-primary">
-                                                View Screenshot
-                                            </a>
-                                        </div>
-                                    </div>
+                        <div class="col-md-3 text-center">
+                            <h2 class="{% if session.focus_loss_count > 10 %}text-danger{% endif %}">{{ session.focus_loss_count }}</h2>
+                            <p>Focus Losses</p>
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <h2 class="{% if session.copy_paste_attempts > 3 %}text-danger{% endif %}">{{ session.copy_paste_attempts }}</h2>
+                            <p>Copy/Paste Attempts</p>
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <h2>{{ session.screenshot_count }}</h2>
+                            <p>Screenshots</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Severity Meter -->
+                    {% with total_violations=session.tab_switch_count|add:session.focus_loss_count|add:session.copy_paste_attempts %}
+                    <div class="mt-3">
+                        <label>Overall Severity:</label>
+                        <div class="severity-meter">
+                            <div class="severity-indicator" style="left: {% widthratio total_violations 50 100 %}%;"></div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <small class="text-success">Low</small>
+                            <small class="text-warning">Medium</small>
+                            <small class="text-danger">High</small>
+                        </div>
+                    </div>
+                    {% endwith %}
+                </div>
+            </div>
+
+            <!-- Activity Timeline -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Activity Timeline</h5>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        {% for activity in activities %}
+                        <div class="timeline-item">
+                            <div class="timeline-marker 
+                                {% if activity.activity_type == 'TAB_SWITCH' %}high
+                                {% elif activity.activity_type == 'WINDOW_BLUR' %}medium
+                                {% else %}low{% endif %}">
+                            </div>
+                            <div class="timeline-content">
+                                <div class="d-flex justify-content-between">
+                                    <strong>{{ activity.get_activity_type_display }}</strong>
+                                    <small class="text-muted">{{ activity.timestamp|date:"H:i:s" }}</small>
                                 </div>
-                                {% endfor %}
+                                {% if activity.details %}
+                                <pre class="small mt-2 mb-0 bg-light p-2 rounded"><code>{{ activity.details|pprint }}</code></pre>
+                                {% endif %}
                             </div>
-                            {% else %}
-                            <div class="alert alert-info">
-                                <i class="bi bi-info-circle"></i>
-                                No screenshots captured for this session.
-                            </div>
-                            {% endif %}
                         </div>
+                        {% empty %}
+                        <p class="text-muted text-center">No activities recorded</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <!-- Actions -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'grading:grade_submission' session.submission.submission_id %}" class="btn btn-primary">
+                            <i class="bi bi-pencil"></i> Grade Submission
+                        </a>
+                        
+                        <button class="btn btn-success mark-reviewed" data-session-id="{{ session.session_id }}">
+                            <i class="bi bi-check-circle"></i> Mark as Reviewed
+                        </button>
+                        
+                        <button class="btn btn-danger invalidate-exam" data-session-id="{{ session.session_id }}">
+                            <i class="bi bi-exclamation-triangle"></i> Invalidate Exam
+                        </button>
+                        
+                        <a href="mailto:{{ session.student.email }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-envelope"></i> Contact Student
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screenshots -->
+            <div class="card">
+                <div class="card-header">
+                    <h5>Screenshots ({{ screenshots|length }})</h5>
+                </div>
+                <div class="card-body">
+                    <div class="screenshot-gallery">
+                        {% for screenshot in screenshots %}
+                        <div class="screenshot-gallery-item {% if screenshot.is_flagged %}flagged{% endif %}" 
+                             onclick="showScreenshot('{{ screenshot.image_path }}', '{{ screenshot.timestamp|date:"H:i:s" }} - {{ screenshot.reason }}')">
+                            <img src="{% url 'proctoring:get_screenshot' screenshot.screenshot_id %}" 
+                                 alt="Screenshot at {{ screenshot.timestamp|date:"H:i:s" }}">
+                            <div class="screenshot-timestamp">
+                                {{ screenshot.timestamp|date:"H:i:s" }}
+                                {% if screenshot.is_flagged %}
+                                <i class="bi bi-flag"></i>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% empty %}
+                        <p class="text-muted text-center">No screenshots available</p>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
@@ -256,61 +312,103 @@
     </div>
 </div>
 
-<!-- Status Update Modal -->
-{% if request.user.role in 'INSTRUCTOR,ADMIN' and session.status != 'COMPLETED' %}
-<div class="modal fade" id="statusModal" tabindex="-1">
+<!-- Screenshot Modal -->
+<div class="modal fade" id="screenshotModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Screenshot Evidence</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img src="" id="modalImage" class="img-fluid" style="max-height: 70vh;">
+                <div id="modalCaption" class="mt-2"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Report Notes Modal -->
+<div class="modal fade" id="reportModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Update Session Status</h5>
+                <h5 class="modal-title">Add Report Notes</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <form id="statusForm">
-                    <div class="mb-3">
-                        <label for="newStatus" class="form-label">New Status</label>
-                        <select class="form-select" id="newStatus" required>
-                            <option value="ACTIVE">Active</option>
-                            <option value="FLAGGED">Flagged</option>
-                            <option value="REVIEWED">Reviewed</option>
-                            <option value="COMPLETED">Completed</option>
-                        </select>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="updateSessionStatus()">Update</button>
-            </div>
+            <form method="post" action="{% url 'proctoring:add_report_notes' session.session_id %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <textarea name="notes" class="form-control" rows="5" placeholder="Add your observations..."></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Notes</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-function updateSessionStatus() {
-    const newStatus = document.getElementById('newStatus').value;
-    const sessionId = '{{ session.session_id }}';
-    
-    fetch(`/proctoring/api/session/${sessionId}/update/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token }}'
-        },
-        body: JSON.stringify({ status: newStatus })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            location.reload();
-        } else {
-            alert('Error: ' + data.error);
-        }
-    })
-    .catch(error => {
-        alert('Error updating status: ' + error);
-    });
+function showScreenshot(imagePath, caption) {
+    document.getElementById('modalImage').src = imagePath;
+    document.getElementById('modalCaption').innerHTML = caption;
+    new bootstrap.Modal(document.getElementById('screenshotModal')).show();
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Mark as reviewed
+    document.querySelectorAll('.mark-reviewed').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const sessionId = this.dataset.sessionId;
+            
+            fetch(`/proctoring/api/session/${sessionId}/status/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({ status: 'REVIEWED' })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    });
+    
+    // Invalidate exam
+    document.querySelectorAll('.invalidate-exam').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('Are you sure? This will mark the exam as invalid due to proctoring violations.')) {
+                return;
+            }
+            
+            const sessionId = this.dataset.sessionId;
+            
+            fetch(`/proctoring/api/session/${sessionId}/invalidate/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Exam has been invalidated');
+                    location.reload();
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    });
+});
 </script>
-{% endif %}
 {% endblock %}

@@ -1,3 +1,4 @@
+<!-- templates/base.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -19,31 +20,75 @@
         }
         .sidebar {
             min-height: calc(100vh - 56px);
-            background-color: #343a40;
+            background: linear-gradient(180deg, #2c3e50 0%, #1a2634 100%);
+            color: #fff;
         }
-        .sidebar a {
+        .sidebar .nav-link {
             color: #adb5bd;
+            padding: 0.8rem 1rem;
+            margin: 0.2rem 0;
+            border-radius: 8px;
+            transition: all 0.2s;
         }
-        .sidebar a:hover {
+        .sidebar .nav-link:hover {
             color: #ffffff;
+            background: rgba(255,255,255,0.1);
+            transform: translateX(5px);
+        }
+        .sidebar .nav-link.active {
+            color: #ffffff;
+            background: rgba(255,255,255,0.2);
+            border-left: 4px solid #007bff;
+        }
+        .sidebar .nav-link i {
+            margin-right: 10px;
+            width: 20px;
+            text-align: center;
+        }
+        .sidebar-section {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .sidebar-section-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            color: #6c757d;
+            margin-bottom: 10px;
+            padding-left: 1rem;
         }
         .main-content {
             padding: 20px;
+            background-color: #f8f9fa;
+            min-height: calc(100vh - 56px);
         }
         .card {
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             margin-bottom: 20px;
+            border: none;
+            border-radius: 10px;
         }
         .exam-card:hover {
             transform: translateY(-5px);
             transition: transform 0.2s;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .badge-flag {
+            position: absolute;
+            top: 10px;
+            right: 10px;
         }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
         <div class="container-fluid">
             <a class="navbar-brand" href="{% url 'core:home' %}">
                 <i class="bi bi-mortarboard-fill"></i> ExamSystem
@@ -56,34 +101,79 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'core:dashboard' %}">Dashboard</a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'core:dashboard' %}">
+                            <i class="bi bi-speedometer2"></i> Dashboard
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'exams:exam_list' %}">Exams</a>
+                        <a class="nav-link {% if 'exam' in request.path %}active{% endif %}" href="{% url 'exams:exam_list' %}">
+                            <i class="bi bi-pencil-square"></i> Exams
+                        </a>
+                    </li>
+                    {% if user.role == 'INSTRUCTOR' or user.role == 'ADMIN' %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'grading' in request.path %}active{% endif %}" href="{% url 'grading:dashboard' %}">
+                            <i class="bi bi-check2-circle"></i> Grading
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#">Analytics</a>
+                        <a class="nav-link {% if 'proctoring' in request.path %}active{% endif %}" href="{% url 'proctoring:dashboard' %}">
+                            <i class="bi bi-shield-check"></i> Proctoring
+                        </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'analytics' in request.path %}active{% endif %}" href="#">
+                            <i class="bi bi-graph-up"></i> Analytics
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
                 
                 <ul class="navbar-nav">
                     {% if user.is_authenticated %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                                <i class="bi bi-person-circle"></i> {{ user.email }}
+                                <i class="bi bi-person-circle"></i> 
+                                {% if user.get_full_name %}
+                                    {{ user.get_full_name }}
+                                {% else %}
+                                    {{ user.email }}
+                                {% endif %}
+                                <span class="badge bg-{% if user.role == 'INSTRUCTOR' %}warning{% elif user.role == 'ADMIN' %}danger{% else %}info{% endif %} ms-1">
+                                    {{ user.get_role_display }}
+                                </span>
                             </a>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="{% url 'users:profile' %}">Profile</a></li>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'users:profile' %}">
+                                        <i class="bi bi-person"></i> Profile
+                                    </a>
+                                </li>
+                                {% if user.role == 'INSTRUCTOR' or user.role == 'ADMIN' %}
+                                <li>
+                                    <a class="dropdown-item" href="/admin/">
+                                        <i class="bi bi-gear"></i> Admin Panel
+                                    </a>
+                                </li>
+                                {% endif %}
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{% url 'users:logout' %}">Logout</a></li>
+                                <li>
+                                    <a class="dropdown-item text-danger" href="{% url 'users:logout' %}">
+                                        <i class="bi bi-box-arrow-right"></i> Logout
+                                    </a>
+                                </li>
                             </ul>
                         </li>
                     {% else %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'users:login' %}">Login</a>
+                            <a class="nav-link" href="{% url 'users:login' %}">
+                                <i class="bi bi-box-arrow-in-right"></i> Login
+                            </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'users:register' %}">Register</a>
+                            <a class="nav-link" href="{% url 'users:register' %}">
+                                <i class="bi bi-person-plus"></i> Register
+                            </a>
                         </li>
                     {% endif %}
                 </ul>
@@ -95,9 +185,146 @@
     <div class="container-fluid">
         <div class="row">
             {% if user.is_authenticated %}
-            <!-- Sidebar -->
-            <div class="col-md-2 d-none d-md-block sidebar p-3">
-                {% include 'includes/sidebar.html' %}
+            <!-- Enhanced Sidebar -->
+            <div class="col-md-2 d-none d-md-block sidebar p-0">
+                <div class="p-3">
+                    <!-- User Info -->
+                    <div class="text-center mb-4">
+                        <i class="bi bi-person-circle" style="font-size: 3rem;"></i>
+                        <h6 class="mt-2 text-white">
+                            {% if user.get_full_name %}
+                                {{ user.get_full_name }}
+                            {% else %}
+                                {{ user.email }}
+                            {% endif %}
+                        </h6>
+                        <span class="badge bg-{% if user.role == 'INSTRUCTOR' %}warning{% elif user.role == 'ADMIN' %}danger{% else %}info{% endif %}">
+                            {{ user.get_role_display }}
+                        </span>
+                    </div>
+
+                    <!-- Main Navigation -->
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">Main</div>
+                        <nav class="nav flex-column">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'core:dashboard' %}">
+                                <i class="bi bi-speedometer2"></i> Dashboard
+                            </a>
+                            <a class="nav-link {% if 'exam' in request.path %}active{% endif %}" href="{% url 'exams:exam_list' %}">
+                                <i class="bi bi-pencil-square"></i> Exams
+                            </a>
+                        </nav>
+                    </div>
+
+                    {% if user.role == 'STUDENT' %}
+                    <!-- Student Section -->
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">Learning</div>
+                        <nav class="nav flex-column">
+                            <a class="nav-link" href="{% url 'exams:exam_list' %}">
+                                <i class="bi bi-journal"></i> Available Exams
+                            </a>
+                            <a class="nav-link" href="#">
+                                <i class="bi bi-clock-history"></i> Past Exams
+                            </a>
+                            <a class="nav-link" href="#">
+                                <i class="bi bi-bar-chart"></i> My Performance
+                            </a>
+                        </nav>
+                    </div>
+                    {% endif %}
+
+                    {% if user.role == 'INSTRUCTOR' or user.role == 'ADMIN' %}
+                    <!-- Instructor/Admin Sections -->
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">Teaching</div>
+                        <nav class="nav flex-column">
+                            <a class="nav-link {% if 'create_exam' in request.path %}active{% endif %}" href="{% url 'exams:create_exam' %}">
+                                <i class="bi bi-plus-circle"></i> Create Exam
+                            </a>
+                            <a class="nav-link {% if 'template' in request.path %}active{% endif %}" href="{% url 'exams:template_list' %}">
+                                <i class="bi bi-files"></i> Exam Templates
+                            </a>
+                            <a class="nav-link {% if 'courses' in request.path %}active{% endif %}" href="#">
+                                <i class="bi bi-book"></i> My Courses
+                            </a>
+                        </nav>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">Assessment</div>
+                        <nav class="nav flex-column">
+                            <a class="nav-link {% if 'grading' in request.path %}active{% endif %}" href="{% url 'grading:dashboard' %}">
+                                <i class="bi bi-check2-circle"></i> Grading Dashboard
+                                {% with pending_count=request.user.grading_pending_count|default:0 %}
+                                    {% if pending_count > 0 %}
+                                    <span class="badge bg-danger rounded-pill float-end">{{ pending_count }}</span>
+                                    {% endif %}
+                                {% endwith %}
+                            </a>
+                            <a class="nav-link {% if 'submissions' in request.path %}active{% endif %}" href="{% url 'grading:submissions_list' %}">
+                                <i class="bi bi-journal-check"></i> All Submissions
+                            </a>
+                            <a class="nav-link {% if 'bulk' in request.path %}active{% endif %}" href="{% url 'grading:bulk_overview' %}">
+                                <i class="bi bi-grid-3x3"></i> Bulk Grading
+                            </a>
+                            <a class="nav-link {% if 'rubric' in request.path %}active{% endif %}" href="{% url 'grading:rubric_list' %}">
+                                <i class="bi bi-table"></i> Rubrics
+                            </a>
+                        </nav>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">Security</div>
+                        <nav class="nav flex-column">
+                            <a class="nav-link {% if 'proctoring' in request.path %}active{% endif %}" href="{% url 'proctoring:dashboard' %}">
+                                <i class="bi bi-shield-check"></i> Proctoring Dashboard
+                                {% with flagged_count=request.user.flagged_sessions_count|default:0 %}
+                                    {% if flagged_count > 0 %}
+                                    <span class="badge bg-danger rounded-pill float-end">{{ flagged_count }}</span>
+                                    {% endif %}
+                                {% endwith %}
+                            </a>
+                            <a class="nav-link {% if 'proctoring:review' in request.path %}active{% endif %}" href="{% url 'proctoring:review_dashboard' %}">
+                                <i class="bi bi-eye"></i> Review Sessions
+                            </a>
+                            <a class="nav-link {% if 'plagiarism' in request.path %}active{% endif %}" href="{% url 'exams:plagiarism_dashboard' %}">
+                                <i class="bi bi-files"></i> Plagiarism Checks
+                            </a>
+                        </nav>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">Analytics</div>
+                        <nav class="nav flex-column">
+                            <a class="nav-link" href="#">
+                                <i class="bi bi-graph-up"></i> Performance Analytics
+                            </a>
+                            <a class="nav-link" href="#">
+                                <i class="bi bi-pie-chart"></i> Grade Distribution
+                            </a>
+                            <a class="nav-link" href="#">
+                                <i class="bi bi-clock"></i> Proctoring Reports
+                            </a>
+                        </nav>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">Administration</div>
+                        <nav class="nav flex-column">
+                            <a class="nav-link" href="/admin/">
+                                <i class="bi bi-gear"></i> Admin Panel
+                            </a>
+                            <a class="nav-link" href="#">
+                                <i class="bi bi-people"></i> Manage Users
+                            </a>
+                            <a class="nav-link" href="#">
+                                <i class="bi bi-building"></i> Institution Settings
+                            </a>
+                        </nav>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
             {% endif %}
             
@@ -106,6 +333,7 @@
                 {% if messages %}
                     {% for message in messages %}
                         <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            <i class="bi bi-info-circle me-2"></i>
                             {{ message }}
                             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                         </div>
@@ -120,7 +348,16 @@
     <!-- Footer -->
     <footer class="bg-dark text-white text-center py-3 mt-4">
         <div class="container">
-            <p>&copy; {% now "Y" %} Online Exam System. All rights reserved.</p>
+            <div class="row">
+                <div class="col-md-6 text-md-start">
+                    <p>&copy; {% now "Y" %} Online Exam System. All rights reserved.</p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <a href="#" class="text-white me-3">Privacy Policy</a>
+                    <a href="#" class="text-white me-3">Terms of Service</a>
+                    <a href="#" class="text-white">Contact</a>
+                </div>
+            </div>
         </div>
     </footer>
 
@@ -128,15 +365,29 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     
     <!-- Custom JS -->
-    <!-- <script>
-        setTimeout(() => {
-            const alerts = document.querySelectorAll('.alert');
-            alerts.forEach(alert => {
-                const bsAlert = new bootstrap.Alert(alert);
-                bsAlert.close();
+    <script>
+        // Auto-dismiss alerts after 5 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                const alerts = document.querySelectorAll('.alert');
+                alerts.forEach(alert => {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                });
+            }, 5000);
+        });
+
+        // Add active class to current nav item
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentPath = window.location.pathname;
+            document.querySelectorAll('.nav-link').forEach(link => {
+                const href = link.getAttribute('href');
+                if (href && currentPath.startsWith(href) && href !== '/') {
+                    link.classList.add('active');
+                }
             });
-        }, 5000);
-    </script> -->
+        });
+    </script>
     
     {% block extra_js %}{% endblock %}
 </body>

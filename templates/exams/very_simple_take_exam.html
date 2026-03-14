@@ -1,94 +1,1134 @@
 <!-- templates/exams/very_simple_take_exam.html -->
 {% extends 'base.html' %}
+{% load exam_filters %}
 
 {% block title %}Taking Exam: {{ exam.title }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    .question-card {
+        border-left: 4px solid #007bff;
+        margin-bottom: 20px;
+        transition: all 0.2s;
+    }
+    .points-badge {
+        font-size: 0.9rem;
+    }
+    .timer {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #dc3545;
+    }
+    .timer.warning {
+        color: #ffc107;
+    }
+    .timer.danger {
+        color: #dc3545;
+        animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.7; }
+        100% { opacity: 1; }
+    }
+    .exam-alert {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        margin-bottom: 20px;
+    }
+    
+    /* Proctoring Styles */
+    .proctoring-warning {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        max-width: 350px;
+        animation: slideIn 0.3s ease-out;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .proctoring-indicator {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 30px;
+        font-size: 0.9rem;
+        z-index: 9998;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 2px solid rgba(255,255,255,0.2);
+    }
+    .proctoring-indicator.flagged {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+        animation: pulse-border 1.5s infinite;
+    }
+    @keyframes pulse-border {
+        0% { border-color: rgba(255,255,255,0.2); }
+        50% { border-color: rgba(255,255,255,0.8); }
+        100% { border-color: rgba(255,255,255,0.2); }
+    }
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    
+    /* Fullscreen overlay for warnings */
+    .fullscreen-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.9);
+        z-index: 10000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        text-align: center;
+        flex-direction: column;
+    }
+    
+    /* Question navigation */
+    .question-nav {
+        position: sticky;
+        top: 70px;
+        max-height: calc(100vh - 90px);
+        overflow-y: auto;
+    }
+    .question-nav-item {
+        display: inline-block;
+        width: 40px;
+        height: 40px;
+        line-height: 40px;
+        text-align: center;
+        margin: 5px;
+        border-radius: 50%;
+        background: #f8f9fa;
+        cursor: pointer;
+        text-decoration: none;
+        color: #333;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+    .question-nav-item.answered {
+        background: #28a745;
+        color: white;
+    }
+    .question-nav-item.current {
+        background: #007bff;
+        color: white;
+        transform: scale(1.1);
+    }
+    .question-nav-item.flagged {
+        border: 3px solid #ffc107;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="card">
-    <div class="card-header bg-primary text-white">
-        <h4 class="mb-0">{{ exam.title }}</h4>
-        <small>Total Points: {{ exam.total_points }} | Questions: {{ questions|length }}</small>
-    </div>
-    
-    <div class="alert alert-info m-3">
-        <i class="bi bi-info-circle"></i> Answer all questions. Click "Submit Exam" when finished.
-    </div>
-    
-    <form method="post" id="examForm">
-        {% csrf_token %}
-        
-        <div class="card-body">
-            {% for question in questions %}
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5>Question {{ forloop.counter }}</h5>
-                    <small>{{ question.get_question_type_display }} - {{ question.points }} points</small>
+<div class="container-fluid">
+    <div class="row">
+        <!-- Main Exam Content -->
+        <div class="col-lg-9">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-0">{{ exam.title }}</h4>
+                            {% if exam.course %}
+                                <small>{{ exam.course.code }} - {{ exam.course.title }}</small>
+                            {% endif %}
+                        </div>
+                        <div class="text-end">
+                            {% if exam.time_limit_minutes %}
+                            <div class="timer" id="countdown-container">
+                                Time: <span id="countdown">{{ exam.time_limit_minutes }}:00</span>
+                            </div>
+                            {% endif %}
+                            <div>Questions: <span id="total-questions">{{ questions|length }}</span></div>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <p class="card-text">{{ question.question_text|linebreaks }}</p>
-                    
-                    {% comment %} Simple logic without filters {% endcomment %}
-                    {% if question.question_type == 'MCQ' %}
-                        {% for option in question.options %}
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="radio" 
-                                   name="question_{{ question.question_id }}" 
-                                   id="q{{ question.question_id }}_option{{ forloop.counter }}" 
-                                   value="{{ option }}">
-                            <label class="form-check-label" for="q{{ question.question_id }}_option{{ forloop.counter }}">
-                                {{ option }}
-                            </label>
-                        </div>
-                        {% endfor %}
-                    
-                    {% elif question.question_type == 'TRUE_FALSE' %}
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="radio" 
-                                   name="question_{{ question.question_id }}" 
-                                   id="q{{ question.question_id }}_true" 
-                                   value="True">
-                            <label class="form-check-label" for="q{{ question.question_id }}_true">
-                                True
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" 
-                                   name="question_{{ question.question_id }}" 
-                                   id="q{{ question.question_id }}_false" 
-                                   value="False">
-                            <label class="form-check-label" for="q{{ question.question_id }}_false">
-                                False
-                            </label>
-                        </div>
-                    
-                    {% else %}
-                        <div class="form-group">
-                            <textarea class="form-control" 
-                                      name="question_{{ question.question_id }}" 
-                                      rows="4"
-                                      placeholder="Type your answer here..."></textarea>
-                        </div>
+                
+                <div class="alert alert-info exam-alert" id="exam-alert">
+                    <i class="bi bi-info-circle"></i> 
+                    <span id="alert-message">Your answers are automatically saved every 30 seconds.</span>
+                    {% if exam.require_secure_browser %}
+                    <i class="bi bi-shield-check ms-2"></i> 
+                    <strong>Secure proctoring is active - your session is being monitored</strong>
                     {% endif %}
                 </div>
+                
+                <form method="post" id="examForm">
+                    {% csrf_token %}
+                    
+                    <div class="card-body" id="questions-container">
+                        {% for question in questions %}
+                        <div class="card question-card mb-4" id="question-{{ forloop.counter }}" data-question-id="{{ question.question_id }}" data-question-type="{{ question.question_type }}" data-position="{{ forloop.counter }}">
+                            <div class="card-header">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0">Question {{ forloop.counter }}</h5>
+                                    <div>
+                                        <span class="badge bg-primary points-badge me-2">{{ question.points }} points</span>
+                                        <span class="badge bg-secondary">{{ question.get_question_type_display }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-text fw-bold">{{ question.question_text|linebreaks }}</p>
+                                
+                                {% comment %} Check if answer exists for this question {% endcomment %}
+                                {% with answer_obj=answers|dict_key:question.question_id %}
+                                
+                                {% if question.question_type == 'MCQ' %}
+                                    <div class="mt-3">
+                                        {% for option in question.options %}
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input answer-input" 
+                                                   type="radio" 
+                                                   name="question_{{ question.question_id }}" 
+                                                   id="q{{ question.question_id }}_option{{ forloop.counter }}" 
+                                                   value="{{ option }}"
+                                                   data-question-pos="{{ forloop.parentloop.counter }}"
+                                                   {% if answer_obj and option == answer_obj.answer_text %}checked{% endif %}>
+                                            <label class="form-check-label" for="q{{ question.question_id }}_option{{ forloop.counter }}">
+                                                {{ option }}
+                                            </label>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                
+                                {% elif question.question_type == 'TRUE_FALSE' %}
+                                    <div class="mt-3">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input answer-input" 
+                                                   type="radio" 
+                                                   name="question_{{ question.question_id }}" 
+                                                   id="q{{ question.question_id }}_true" 
+                                                   value="True"
+                                                   data-question-pos="{{ forloop.counter }}"
+                                                   {% if answer_obj and answer_obj.answer_text == 'True' %}checked{% endif %}>
+                                            <label class="form-check-label" for="q{{ question.question_id }}_true">
+                                                True
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input answer-input" 
+                                                   type="radio" 
+                                                   name="question_{{ question.question_id }}" 
+                                                   id="q{{ question.question_id }}_false" 
+                                                   value="False"
+                                                   data-question-pos="{{ forloop.counter }}"
+                                                   {% if answer_obj and answer_obj.answer_text == 'False' %}checked{% endif %}>
+                                            <label class="form-check-label" for="q{{ question.question_id }}_false">
+                                                False
+                                            </label>
+                                        </div>
+                                    </div>
+                                
+                                {% elif question.question_type == 'SHORT_ANSWER' %}
+                                    <div class="mt-3">
+                                        <textarea class="form-control answer-input" 
+                                                  name="question_{{ question.question_id }}" 
+                                                  rows="4"
+                                                  data-question-pos="{{ forloop.counter }}"
+                                                  placeholder="Type your answer here...">{{ answer_obj.answer_text|default:'' }}</textarea>
+                                        <small class="text-muted">Short answer (1-2 sentences recommended)</small>
+                                    </div>
+                                
+                                {% elif question.question_type == 'ESSAY' %}
+                                    <div class="mt-3">
+                                        <textarea class="form-control answer-input" 
+                                                  name="question_{{ question.question_id }}" 
+                                                  rows="8"
+                                                  data-question-pos="{{ forloop.counter }}"
+                                                  placeholder="Type your essay here...">{{ answer_obj.answer_text|default:'' }}</textarea>
+                                        <small class="text-muted">
+                                            {% if question.expected_answer_length %}
+                                                Expected length: ~{{ question.expected_answer_length }} words
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                {% endif %}
+                                
+                                {% endwith %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="card-footer">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <button type="button" id="save-progress-btn" class="btn btn-outline-primary">
+                                    <i class="bi bi-save"></i> Save Progress
+                                </button>
+                                <span id="save-status" class="ms-2 text-muted"></span>
+                            </div>
+                            <div>
+                                <button type="button" id="flag-question-btn" class="btn btn-outline-warning me-2">
+                                    <i class="bi bi-flag"></i> Flag for Review
+                                </button>
+                                <button type="submit" name="submit_exam" id="submit-exam-btn" class="btn btn-success" 
+                                        onclick="return confirm('Are you sure you want to submit the exam? This action cannot be undone.')">
+                                    <i class="bi bi-check-circle"></i> Submit Exam
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
             </div>
-            {% endfor %}
         </div>
         
-        <div class="card-footer">
-            <div class="d-flex justify-content-between">
-                <a href="{% url 'exams:exam_detail' exam.exam_id %}" class="btn btn-secondary">
-                    Cancel
-                </a>
-                <div>
-                    <button type="submit" name="save_progress" class="btn btn-outline-primary me-2">
-                        Save Progress
-                    </button>
-                    <button type="submit" name="submit_exam" class="btn btn-success">
-                        Submit Exam
-                    </button>
+        <!-- Question Navigation Sidebar -->
+        <div class="col-lg-3">
+            <div class="card question-nav">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Question Navigator</h5>
+                </div>
+                <div class="card-body">
+                    <div class="question-nav-grid">
+                        {% for question in questions %}
+                        <a href="#question-{{ forloop.counter }}" 
+                           class="question-nav-item" 
+                           id="nav-q-{{ forloop.counter }}"
+                           data-position="{{ forloop.counter }}">
+                            {{ forloop.counter }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                    <hr>
+                    <div class="small">
+                        <div><span class="badge bg-success">&nbsp;</span> Answered</div>
+                        <div><span class="badge bg-primary">&nbsp;</span> Current</div>
+                        <div><span class="badge bg-warning">&nbsp;</span> Flagged</div>
+                    </div>
                 </div>
             </div>
         </div>
-    </form>
+    </div>
 </div>
+
+<!-- Proctoring warning template (hidden) -->
+<div id="proctoring-warning-template" style="display: none;">
+    <div class="alert alert-warning alert-dismissible fade show proctoring-warning" role="alert">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-exclamation-triangle-fill me-2 fs-4"></i>
+            <div>
+                <strong class="warning-title">Warning</strong>
+                <div class="warning-message small"></div>
+                <div class="warning-count small text-muted mt-1"></div>
+            </div>
+            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Include html2canvas from CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<script>
+// =============================================
+// Timer functionality
+// =============================================
+{% if exam.time_limit_minutes %}
+let totalMinutes = {{ exam.time_limit_minutes }};
+let timeRemaining = totalMinutes * 60;
+let timerInterval;
+
+function updateTimer() {
+    if (timeRemaining <= 0) {
+        document.getElementById('countdown').innerHTML = "TIME'S UP!";
+        document.getElementById('alert-message').innerHTML = "Time's up! Submitting exam...";
+        
+        // Auto-submit the exam
+        if (!examSubmitted) {
+            examSubmitted = true;
+            document.getElementById('examForm').submit();
+        }
+        return;
+    }
+    
+    let minutes = Math.floor(timeRemaining / 60);
+    let seconds = timeRemaining % 60;
+    
+    document.getElementById('countdown').innerHTML = 
+        minutes.toString().padStart(2, '0') + ':' + seconds.toString().padStart(2, '0');
+    
+    // Change color based on time remaining
+    const timerElement = document.getElementById('countdown-container');
+    if (timeRemaining < 300) { // Less than 5 minutes
+        timerElement.className = 'timer danger';
+    } else if (timeRemaining < 600) { // Less than 10 minutes
+        timerElement.className = 'timer warning';
+    }
+    
+    timeRemaining--;
+}
+
+// Start timer
+timerInterval = setInterval(updateTimer, 1000);
+updateTimer();
+{% endif %}
+
+// =============================================
+// Auto-save functionality
+// =============================================
+let saveTimeout;
+let lastSaveTime = Date.now();
+let examSubmitted = false;
+
+function showSaveStatus(message, isError = false) {
+    const statusEl = document.getElementById('save-status');
+    statusEl.innerHTML = message;
+    statusEl.style.color = isError ? '#dc3545' : '#28a745';
+    
+    if (message) {
+        setTimeout(() => {
+            statusEl.innerHTML = '';
+        }, 3000);
+    }
+}
+
+function saveProgress() {
+    // Don't save if exam already submitted
+    if (examSubmitted) return;
+    
+    // Show saving indicator
+    showSaveStatus('Saving...');
+    
+    // Collect all form data
+    const formData = new FormData(document.getElementById('examForm'));
+    formData.append('save_progress', 'true');
+    
+    // Send via fetch
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.text())
+    .then(() => {
+        lastSaveTime = Date.now();
+        showSaveStatus('Saved at ' + new Date().toLocaleTimeString());
+        updateQuestionNavStatus();
+    })
+    .catch(error => {
+        console.error('Save failed:', error);
+        showSaveStatus('Save failed', true);
+    });
+}
+
+// Auto-save every 30 seconds
+setInterval(saveProgress, 30000);
+
+// Save on input change (debounced)
+function scheduleSave() {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(saveProgress, 2000);
+    
+    // Update question nav for this question
+    const input = event.target;
+    if (input.classList.contains('answer-input')) {
+        const questionPos = input.dataset.questionPos;
+        if (questionPos) {
+            document.getElementById(`nav-q-${questionPos}`).classList.add('answered');
+        }
+    }
+}
+
+// Attach to all inputs
+document.querySelectorAll('.answer-input').forEach(input => {
+    input.addEventListener('change', scheduleSave);
+    input.addEventListener('keyup', scheduleSave);
+});
+
+// =============================================
+// Question Navigation
+// =============================================
+function updateQuestionNavStatus() {
+    // Mark answered questions
+    document.querySelectorAll('.answer-input').forEach(input => {
+        if (input.type === 'radio') {
+            const radios = document.querySelectorAll(`input[name="${input.name}"]`);
+            const isChecked = Array.from(radios).some(r => r.checked);
+            if (isChecked) {
+                const questionPos = input.dataset.questionPos;
+                document.getElementById(`nav-q-${questionPos}`).classList.add('answered');
+            }
+        } else if (input.tagName === 'TEXTAREA' && input.value.trim() !== '') {
+            const questionPos = input.dataset.questionPos;
+            document.getElementById(`nav-q-${questionPos}`).classList.add('answered');
+        }
+    });
+}
+
+// Smooth scroll to question
+document.querySelectorAll('.question-nav-item').forEach(link => {
+    link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetId = link.getAttribute('href');
+        const targetElement = document.querySelector(targetId);
+        if (targetElement) {
+            targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            // Highlight current in nav
+            document.querySelectorAll('.question-nav-item').forEach(item => {
+                item.classList.remove('current');
+            });
+            link.classList.add('current');
+        }
+    });
+});
+
+// Highlight current question on scroll
+window.addEventListener('scroll', () => {
+    const questions = document.querySelectorAll('.question-card');
+    const navItems = document.querySelectorAll('.question-nav-item');
+    
+    questions.forEach((question, index) => {
+        const rect = question.getBoundingClientRect();
+        if (rect.top <= 100 && rect.bottom >= 100) {
+            navItems.forEach(item => item.classList.remove('current'));
+            document.getElementById(`nav-q-${index + 1}`).classList.add('current');
+        }
+    });
+});
+
+// Flag question for review
+document.getElementById('flag-question-btn').addEventListener('click', () => {
+    const currentQuestion = document.querySelector('.question-card:target') || 
+                           document.querySelector('.question-card');
+    if (currentQuestion) {
+        const questionNum = currentQuestion.id.split('-')[1];
+        const navItem = document.getElementById(`nav-q-${questionNum}`);
+        navItem.classList.toggle('flagged');
+        
+        // Log to proctoring if active
+        if (window.examProctor) {
+            window.examProctor.logActivity('QUESTION_FLAGGED', {
+                question_number: questionNum,
+                question_id: currentQuestion.dataset.questionId
+            });
+        }
+        
+        showSaveStatus('Question flagged for review');
+    }
+});
+
+// =============================================
+// Proctoring System - FULLY ENHANCED VERSION
+// =============================================
+class ExamProctor {
+    constructor(submissionId, examId, studentId) {
+        this.submissionId = submissionId;
+        this.examId = examId;
+        this.studentId = studentId;
+        this.sessionId = null;
+        this.screenshotInterval = null;
+        this.heartbeatInterval = null;
+        this.activityLog = [];
+        this.warningCount = 0;
+        this.maxWarnings = 3;
+        this.isFlagged = false;
+        this.startTime = Date.now();
+        this.screenshotCount = 0;
+        
+        // Browser info
+        this.browserInfo = this.getBrowserInfo();
+        
+        // Track fullscreen state
+        this.isFullscreen = false;
+        
+        // Track tab switches
+        this.tabSwitchCount = 0;
+        this.focusLossCount = 0;
+        this.copyPasteAttempts = 0;
+        
+        console.log('Proctor initialized for exam:', examId);
+    }
+    
+    getBrowserInfo() {
+        const ua = navigator.userAgent;
+        let browserName = "Unknown";
+        let browserVersion = "Unknown";
+        
+        if (ua.includes("Chrome") && !ua.includes("Edg")) {
+            browserName = "Chrome";
+            browserVersion = ua.match(/Chrome\/(\d+\.\d+)/)?.[1] || "Unknown";
+        } else if (ua.includes("Firefox")) {
+            browserName = "Firefox";
+            browserVersion = ua.match(/Firefox\/(\d+\.\d+)/)?.[1] || "Unknown";
+        } else if (ua.includes("Safari") && !ua.includes("Chrome")) {
+            browserName = "Safari";
+            browserVersion = ua.match(/Version\/(\d+\.\d+)/)?.[1] || "Unknown";
+        } else if (ua.includes("Edg")) {
+            browserName = "Edge";
+            browserVersion = ua.match(/Edg\/(\d+\.\d+)/)?.[1] || "Unknown";
+        }
+        
+        return {
+            browser_name: browserName,
+            browser_version: browserVersion,
+            os_info: navigator.platform,
+            screen_resolution: `${window.screen.width}x${window.screen.height}`,
+            user_agent: navigator.userAgent.substring(0, 200)
+        };
+    }
+    
+    getCSRFToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    }
+    
+    async startSession() {
+        try {
+            console.log('Starting proctoring session...');
+            
+            const response = await fetch('/proctoring/api/start_session/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCSRFToken()
+                },
+                body: JSON.stringify({
+                    submission_id: this.submissionId,
+                    ...this.browserInfo
+                })
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                this.sessionId = data.session_id;
+                console.log('Proctoring session started:', this.sessionId);
+                
+                // Request fullscreen
+                this.requestFullscreen();
+                
+                // Show proctoring indicator
+                this.showProctoringIndicator();
+                
+                // Start all monitoring
+                this.startMonitoring();
+                this.startHeartbeat();
+                this.startScreenshotCapture();
+                
+                // Log session start
+                this.logActivity('SESSION_START', {
+                    timestamp: new Date().toISOString(),
+                    browser: this.browserInfo
+                });
+            } else {
+                console.error('Failed to start session:', data.error);
+            }
+        } catch (error) {
+            console.error('Failed to start proctoring session:', error);
+        }
+    }
+    
+    requestFullscreen() {
+        try {
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen();
+            } else if (elem.msRequestFullscreen) {
+                elem.msRequestFullscreen();
+            }
+            this.isFullscreen = true;
+        } catch (error) {
+            console.error('Fullscreen request failed:', error);
+        }
+    }
+    
+    showProctoringIndicator() {
+        // Remove existing indicator
+        const existing = document.getElementById('proctoring-indicator');
+        if (existing) existing.remove();
+        
+        const indicator = document.createElement('div');
+        indicator.id = 'proctoring-indicator';
+        indicator.className = 'proctoring-indicator';
+        indicator.innerHTML = `
+            <i class="bi bi-shield-check"></i>
+            <div>
+                <strong>Secure Mode Active</strong>
+                <div class="small" id="proctor-status">Monitoring...</div>
+            </div>
+            <div class="spinner-grow spinner-grow-sm text-light" role="status">
+                <span class="visually-hidden">Recording</span>
+            </div>
+        `;
+        document.body.appendChild(indicator);
+    }
+    
+    updateIndicatorStatus() {
+        const indicator = document.getElementById('proctoring-indicator');
+        if (!indicator) return;
+        
+        const statusEl = document.getElementById('proctor-status');
+        if (this.isFlagged) {
+            indicator.className = 'proctoring-indicator flagged';
+            statusEl.innerHTML = `⚠️ Flagged - ${this.warningCount} warnings`;
+        } else {
+            statusEl.innerHTML = `Monitoring (${Math.round((Date.now() - this.startTime)/60000)} min)`;
+        }
+    }
+    
+    startHeartbeat() {
+        // Send heartbeat every 30 seconds to keep session alive
+        this.heartbeatInterval = setInterval(async () => {
+            if (!this.sessionId || examSubmitted) return;
+            
+            try {
+                await fetch('/proctoring/api/heartbeat/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.getCSRFToken()
+                    },
+                    body: JSON.stringify({
+                        session_id: this.sessionId,
+                        timestamp: new Date().toISOString(),
+                        tab_switch_count: this.tabSwitchCount,
+                        focus_loss_count: this.focusLossCount,
+                        copy_paste_attempts: this.copyPasteAttempts
+                    })
+                });
+            } catch (error) {
+                console.error('Heartbeat failed:', error);
+            }
+        }, 30000);
+    }
+    
+    startMonitoring() {
+        // Track visibility changes (tab switching)
+        let hiddenTime = null;
+        
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                hiddenTime = Date.now();
+                this.focusLossCount++;
+                this.logActivity('WINDOW_BLUR', {
+                    timestamp: new Date().toISOString(),
+                    focus_loss_count: this.focusLossCount
+                });
+                this.showWarning('Please stay focused on the exam window!');
+            } else if (hiddenTime) {
+                const duration = Date.now() - hiddenTime;
+                this.logActivity('WINDOW_FOCUS', {
+                    timestamp: new Date().toISOString(),
+                    away_duration_ms: duration
+                });
+                hiddenTime = null;
+            }
+        });
+        
+        // Detect tab switching via keyboard
+        document.addEventListener('keydown', (e) => {
+            // Alt+Tab, Cmd+Tab, Ctrl+Tab
+            if ((e.altKey && e.key === 'Tab') || 
+                (e.metaKey && e.key === 'Tab') ||
+                (e.ctrlKey && e.key === 'Tab')) {
+                
+                e.preventDefault();
+                this.tabSwitchCount++;
+                
+                this.logActivity('TAB_SWITCH', {
+                    timestamp: new Date().toISOString(),
+                    key_combo: `${e.ctrlKey ? 'Ctrl+' : ''}${e.altKey ? 'Alt+' : ''}${e.metaKey ? 'Cmd+' : ''}Tab`,
+                    tab_switch_count: this.tabSwitchCount
+                });
+                
+                this.showWarning('Tab switching is not allowed during the exam!');
+                return false;
+            }
+            
+            // Block developer tools shortcuts
+            const devToolsShortcuts = [
+                {key: 'F12'},  // F12
+                {key: 'I', ctrl: true, shift: true},  // Ctrl+Shift+I
+                {key: 'J', ctrl: true, shift: true},  // Ctrl+Shift+J
+                {key: 'C', ctrl: true, shift: true},  // Ctrl+Shift+C
+                {key: 'U', ctrl: true}  // Ctrl+U
+            ];
+            
+            for (const shortcut of devToolsShortcuts) {
+                if (e.key === shortcut.key && 
+                    (!shortcut.ctrl || e.ctrlKey) && 
+                    (!shortcut.shift || e.shiftKey)) {
+                    
+                    e.preventDefault();
+                    this.logActivity('DEVTOOLS_ATTEMPT', {
+                        timestamp: new Date().toISOString(),
+                        shortcut: `${e.ctrlKey ? 'Ctrl+' : ''}${e.shiftKey ? 'Shift+' : ''}${e.key}`
+                    });
+                    
+                    this.showWarning('Developer tools are not allowed during the exam!');
+                    return false;
+                }
+            }
+        });
+        
+        // Block right-click
+        document.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            this.logActivity('RIGHT_CLICK', {
+                timestamp: new Date().toISOString(),
+                x: e.clientX,
+                y: e.clientY
+            });
+            return false;
+        });
+        
+        // Block copy/paste
+        document.addEventListener('copy', (e) => {
+            e.preventDefault();
+            this.copyPasteAttempts++;
+            this.logActivity('COPY_ATTEMPT', {
+                timestamp: new Date().toISOString(),
+                copy_paste_attempts: this.copyPasteAttempts
+            });
+            this.showWarning('Copying is not allowed!');
+            return false;
+        });
+        
+        document.addEventListener('paste', (e) => {
+            e.preventDefault();
+            this.copyPasteAttempts++;
+            this.logActivity('PASTE_ATTEMPT', {
+                timestamp: new Date().toISOString(),
+                copy_paste_attempts: this.copyPasteAttempts
+            });
+            this.showWarning('Pasting is not allowed!');
+            return false;
+        });
+        
+        document.addEventListener('cut', (e) => {
+            e.preventDefault();
+            this.copyPasteAttempts++;
+            this.logActivity('CUT_ATTEMPT', {
+                timestamp: new Date().toISOString(),
+                copy_paste_attempts: this.copyPasteAttempts
+            });
+            this.showWarning('Cutting is not allowed!');
+            return false;
+        });
+        
+        // Block print screen
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'PrintScreen') {
+                e.preventDefault();
+                this.logActivity('PRINT_SCREEN', {
+                    timestamp: new Date().toISOString()
+                });
+                this.showWarning('Screenshots are not allowed!');
+                return false;
+            }
+        });
+        
+        // Monitor fullscreen
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                this.isFullscreen = false;
+                this.logActivity('FULLSCREEN_EXIT', {
+                    timestamp: new Date().toISOString()
+                });
+                this.showWarning('Please return to fullscreen mode!');
+                this.requestFullscreen();
+            } else {
+                this.isFullscreen = true;
+            }
+        });
+        
+        // Monitor window focus
+        window.addEventListener('blur', () => {
+            this.focusLossCount++;
+            this.logActivity('WINDOW_BLUR', {
+                timestamp: new Date().toISOString(),
+                focus_loss_count: this.focusLossCount
+            });
+        });
+        
+        // Monitor for multiple monitors/tabs
+        window.addEventListener('resize', () => {
+            if (window.outerWidth !== window.screen.width || 
+                window.outerHeight !== window.screen.height) {
+                this.logActivity('WINDOW_RESIZE', {
+                    timestamp: new Date().toISOString(),
+                    window_size: `${window.outerWidth}x${window.outerHeight}`,
+                    screen_size: `${window.screen.width}x${window.screen.height}`
+                });
+            }
+        });
+    }
+    
+    async logActivity(activityType, details = {}) {
+        if (!this.sessionId) return;
+        
+        // Add common details
+        details = {
+            ...details,
+            time_elapsed_minutes: Math.round((Date.now() - this.startTime) / 60000),
+            warning_count: this.warningCount
+        };
+        
+        try {
+            const response = await fetch('/proctoring/api/log_activity/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCSRFToken()
+                },
+                body: JSON.stringify({
+                    session_id: this.sessionId,
+                    activity_type: activityType,
+                    details: details
+                })
+            });
+            
+            const data = await response.json();
+            
+            // If session becomes flagged, update UI
+            if (data.session_status === 'FLAGGED') {
+                this.isFlagged = true;
+                this.updateIndicatorStatus();
+            }
+            
+            return data;
+        } catch (error) {
+            console.error('Failed to log activity:', error);
+            return null;
+        }
+    }
+    
+    startScreenshotCapture() {
+        // Take screenshot every 60 seconds
+        this.screenshotInterval = setInterval(async () => {
+            await this.captureScreenshot('scheduled');
+            
+            // Also check if exam is still active
+            if (examSubmitted) {
+                this.stopProctoring();
+            }
+        }, 60000);
+        
+        // Take immediate first screenshot
+        setTimeout(() => this.captureScreenshot('initial'), 5000);
+    }
+    
+    async captureScreenshot(reason = 'scheduled') {
+        if (!this.sessionId || examSubmitted || typeof html2canvas === 'undefined') {
+            return;
+        }
+        
+        try {
+            console.log('Capturing screenshot...');
+            
+            // Capture the main content area
+            const content = document.querySelector('.card-body') || document.body;
+            
+            const canvas = await html2canvas(content, {
+                scale: 0.5,
+                logging: false,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff',
+                windowWidth: content.scrollWidth,
+                windowHeight: content.scrollHeight
+            });
+            
+            const imageData = canvas.toDataURL('image/jpeg', 0.6);
+            this.screenshotCount++;
+            
+            const response = await fetch('/proctoring/api/take_screenshot/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCSRFToken()
+                },
+                body: JSON.stringify({
+                    session_id: this.sessionId,
+                    image_data: imageData,
+                    reason: reason,
+                    screenshot_number: this.screenshotCount,
+                    time_elapsed: Math.round((Date.now() - this.startTime) / 1000)
+                })
+            });
+            
+            const data = await response.json();
+            console.log('Screenshot captured:', data.success ? 'success' : 'failed');
+            
+            return data;
+        } catch (error) {
+            console.error('Screenshot capture failed:', error);
+            this.logActivity('SCREENSHOT_FAILED', {
+                reason: reason,
+                error: error.message
+            });
+            return null;
+        }
+    }
+    
+    showWarning(message) {
+        this.warningCount++;
+        
+        // Remove existing warnings
+        document.querySelectorAll('.proctoring-warning').forEach(w => w.remove());
+        
+        // Create new warning
+        const template = document.getElementById('proctoring-warning-template');
+        const warningDiv = template.cloneNode(true);
+        warningDiv.style.display = 'block';
+        warningDiv.id = '';
+        
+        // Set content
+        warningDiv.querySelector('.warning-title').textContent = 
+            this.warningCount >= this.maxWarnings ? 'FINAL WARNING!' : 'Proctoring Warning';
+        warningDiv.querySelector('.warning-message').textContent = message;
+        warningDiv.querySelector('.warning-count').textContent = 
+            `Warning ${this.warningCount} of ${this.maxWarnings}`;
+        
+        // Add to body
+        document.body.appendChild(warningDiv);
+        
+        // Auto-remove after 8 seconds
+        setTimeout(() => {
+            if (warningDiv.parentNode) {
+                warningDiv.remove();
+            }
+        }, 8000);
+        
+        // Take screenshot on warning
+        this.captureScreenshot('warning');
+        
+        // Update indicator
+        this.updateIndicatorStatus();
+        
+        // If max warnings reached, flag the session
+        if (this.warningCount >= this.maxWarnings && !this.isFlagged) {
+            this.isFlagged = true;
+            this.logActivity('SESSION_FLAGGED', {
+                reason: 'Exceeded maximum warnings',
+                warning_count: this.warningCount
+            });
+            
+            // Show persistent warning
+            const overlay = document.createElement('div');
+            overlay.className = 'fullscreen-overlay';
+            overlay.innerHTML = `
+                <i class="bi bi-shield-exclamation display-1 mb-4"></i>
+                <h2>Your session has been flagged</h2>
+                <p class="mb-4">Multiple proctoring violations detected.</p>
+                <div class="alert alert-danger">
+                    This incident will be reported to your instructor.
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            
+            // Remove overlay after 10 seconds
+            setTimeout(() => {
+                if (overlay.parentNode) overlay.remove();
+            }, 10000);
+        }
+    }
+    
+    stopProctoring() {
+        if (this.screenshotInterval) {
+            clearInterval(this.screenshotInterval);
+            this.screenshotInterval = null;
+        }
+        
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+        
+        // Log session end
+        if (this.sessionId && !examSubmitted) {
+            this.logActivity('SESSION_END', {
+                duration_minutes: Math.round((Date.now() - this.startTime) / 60000),
+                total_screenshots: this.screenshotCount,
+                warning_count: this.warningCount,
+                tab_switch_count: this.tabSwitchCount,
+                focus_loss_count: this.focusLossCount,
+                copy_paste_attempts: this.copyPasteAttempts,
+                was_flagged: this.isFlagged
+            });
+        }
+        
+        // Remove indicator
+        const indicator = document.getElementById('proctoring-indicator');
+        if (indicator) indicator.remove();
+        
+        console.log('Proctoring stopped');
+    }
+}
+
+// =============================================
+// Initialize everything when page loads
+// =============================================
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing exam interface...');
+    
+    // Initialize question nav status
+    updateQuestionNavStatus();
+    
+    // Initialize proctoring if required
+    {% if exam.require_secure_browser %}
+    console.log('Proctoring required - initializing...');
+    
+    // Create proctor instance
+    const proctor = new ExamProctor(
+        '{{ submission.submission_id }}',
+        '{{ exam.exam_id }}',
+        '{{ user.id }}'
+    );
+    
+    // Start proctoring after a short delay
+    setTimeout(() => {
+        proctor.startSession();
+    }, 2000);
+    
+    // Store globally for debugging
+    window.examProctor = proctor;
+    
+    // Stop proctoring on form submit
+    document.getElementById('examForm').addEventListener('submit', function() {
+        examSubmitted = true;
+        
+        // Final screenshot before submission
+        if (proctor) {
+            proctor.captureScreenshot('exam_submission').then(() => {
+                proctor.stopProctoring();
+            });
+        }
+    });
+    
+    // Also stop on page unload (if not submitted)
+    window.addEventListener('beforeunload', function() {
+        if (!examSubmitted && proctor) {
+            proctor.stopProctoring();
+        }
+    });
+    {% endif %}
+});
+
+// Helper for dictionary lookup in template
+window.dict_key = function(dict, key) {
+    return dict && dict[key] ? dict[key] : null;
+};
+</script>
 {% endblock %}

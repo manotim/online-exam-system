@@ -330,3 +330,193 @@ def update_session_status(request, session_id):
         })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+@require_POST
+def heartbeat(request):
+    """Heartbeat endpoint to keep session alive and update counters"""
+    try:
+        data = json.loads(request.body)
+        session_id = data.get('session_id')
+        
+        if not session_id:
+            return JsonResponse({'success': False, 'error': 'No session_id provided'})
+        
+        session = get_object_or_404(ProctoringSession, session_id=session_id)
+        
+        # Update session with latest counters
+        session.tab_switch_count = data.get('tab_switch_count', session.tab_switch_count)
+        session.focus_loss_count = data.get('focus_loss_count', session.focus_loss_count)
+        session.copy_paste_attempts = data.get('copy_paste_attempts', session.copy_paste_attempts)
+        
+        # Check if session should be flagged
+        total_violations = (
+            session.tab_switch_count + 
+            session.focus_loss_count + 
+            session.copy_paste_attempts
+        )
+        
+        if total_violations >= 10 and session.status == 'ACTIVE':
+            session.status = 'FLAGGED'
+        
+        session.save()
+        
+        return JsonResponse({
+            'success': True,
+            'session_id': str(session.session_id),
+            'status': session.status,
+            'total_violations': total_violations
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@require_POST
+def update_session_status(request, session_id):
+    """Update proctoring session status"""
+    if request.user.role not in ['INSTRUCTOR', 'ADMIN']:
+        return JsonResponse({'success': False, 'error': 'Access denied'})
+    
+    try:
+        data = json.loads(request.body)
+        new_status = data.get('status')
+        
+        if new_status not in ['ACTIVE', 'COMPLETED', 'FLAGGED', 'REVIEWED']:
+            return JsonResponse({'success': False, 'error': 'Invalid status'})
+        
+        session = get_object_or_404(ProctoringSession, session_id=session_id)
+        session.status = new_status
+        
+        if new_status == 'COMPLETED':
+            session.end_time = timezone.now()
+        
+        session.save()
+        
+        return JsonResponse({
+            'success': True,
+            'session_id': str(session.session_id),
+            'status': session.status
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@require_POST
+def invalidate_exam(request, session_id):
+    """Invalidate an exam due to proctoring violations"""
+    if request.user.role not in ['INSTRUCTOR', 'ADMIN']:
+        return JsonResponse({'success': False, 'error': 'Access denied'})
+    
+    try:
+        session = get_object_or_404(ProctoringSession, session_id=session_id)
+        
+        # Update session status
+        session.status = 'REVIEWED'
+        session.save()
+        
+        # Add a critical activity
+        SuspiciousActivity.objects.create(
+            session=session,
+            activity_type='EXAM_INVALIDATED',
+            details={
+                'reason': 'Manual invalidation by instructor',
+                'instructor': request.user.email,
+                'timestamp': timezone.now().isoformat()
+            }
+        )
+        
+        # You could also mark the submission as invalid here
+        # session.submission.is_valid = False
+        # session.submission.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Exam invalidated successfully'
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@require_POST
+def add_report_notes(request, session_id):
+    """Add instructor notes to a proctoring session"""
+    if request.user.role not in ['INSTRUCTOR', 'ADMIN']:
+        return JsonResponse({'success': False, 'error': 'Access denied'})
+    
+    try:
+        session = get_object_or_404(ProctoringSession, session_id=session_id)
+        notes = request.POST.get('notes', '')
+        
+        # Add as an activity
+        SuspiciousActivity.objects.create(
+            session=session,
+            activity_type='INSTRUCTOR_NOTE',
+            details={
+                'notes': notes,
+                'instructor': request.user.email,
+                'timestamp': timezone.now().isoformat()
+            }
+        )
+        
+        messages.success(request, 'Notes added successfully')
+        return redirect('proctoring:session_detail', session_id=session_id)
+    except Exception as e:
+        messages.error(request, f'Error adding notes: {str(e)}')
+        return redirect('proctoring:session_detail', session_id=session_id)
+
+@login_required
+def review_dashboard(request):
+    """Enhanced review dashboard with filtering and statistics"""
+    if request.user.role not in ['INSTRUCTOR', 'ADMIN']:
+        return HttpResponseForbidden("Access denied")
+    
+    # Get instructor's exams
+    exams = Exam.objects.filter(instructor=request.user, require_secure_browser=True)
+    
+    # Get sessions
+    sessions = ProctoringSession.objects.filter(
+        submission__exam__in=exams
+    ).select_related(
+        'submission', 'submission__student', 'submission__exam'
+    ).prefetch_related('activities').order_by('-start_time')
+    
+    # Apply filters
+    status_filter = request.GET.get('status')
+    exam_filter = request.GET.get('exam')
+    student_filter = request.GET.get('student')
+    
+    if status_filter:
+        sessions = sessions.filter(status=status_filter)
+    if exam_filter:
+        sessions = sessions.filter(submission__exam__exam_id=exam_filter)
+    if student_filter:
+        sessions = sessions.filter(
+            Q(submission__student__email__icontains=student_filter) |
+            Q(submission__student__first_name__icontains=student_filter) |
+            Q(submission__student__last_name__icontains=student_filter)
+        )
+    
+    # Calculate statistics
+    total_sessions = sessions.count()
+    flagged_count = sessions.filter(status='FLAGGED').count()
+    active_count = sessions.filter(status='ACTIVE').count()
+    clean_count = sessions.filter(
+        Q(tab_switch_count=0) & 
+        Q(focus_loss_count=0) & 
+        Q(copy_paste_attempts=0)
+    ).count()
+    
+    context = {
+        'sessions': sessions,
+        'exams': exams,
+        'total_sessions': total_sessions,
+        'flagged_count': flagged_count,
+        'active_count': active_count,
+        'clean_count': clean_count,
+        'status_filter': status_filter,
+        'exam_filter': exam_filter,
+        'student_filter': student_filter,
+    }
+    
+    return render(request, 'proctoring/review_sessions.html', context)
