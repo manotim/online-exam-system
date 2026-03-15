@@ -8,12 +8,16 @@ urlpatterns = [
     # Dashboard and main views
     path('', views.grading_dashboard, name='dashboard'),
     path('submissions/', views.submissions_list, name='submissions_list'),
-    path('submissions/<uuid:exam_id>/', views.submissions_list, name='submissions_list_exam'),
+    path('submissions/<uuid:exam_id>/', views.submissions_list, name='submissions_list_by_exam'),
     
     # Grading views
     path('submission/<uuid:submission_id>/', views.grade_submission, name='grade_submission'),
     path('submission/<uuid:submission_id>/simple/', views.simple_grade_submission, name='simple_grade_submission'),
     path('feedback/<uuid:submission_id>/', views.view_feedback, name='view_feedback'),
+    
+    # Submission flagging
+    path('submission/<uuid:submission_id>/flag/', views.flag_submission, name='flag_submission'),
+    path('flag/<uuid:flag_id>/', views.view_flag, name='view_flag'),
     
     # Bulk grading
     path('bulk/', views.bulk_grade_overview, name='bulk_overview'),
