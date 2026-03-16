@@ -1,0 +1,174 @@
+<!-- templates/exams/course_students.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Students in {{ course.title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'exams:course_list' %}">Courses</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'exams:course_detail' course.course_id %}">{{ course.code }}</a></li>
+                    <li class="breadcrumb-item active">Students</li>
+                </ol>
+            </nav>
+            <h2>
+                <i class="bi bi-people"></i> Enrolled Students
+                <small class="text-muted">{{ total_students }} total</small>
+            </h2>
+        </div>
+        <div class="col-md-4 text-end">
+            {% if can_manage %}
+            <div class="btn-group">
+                <a href="{% url 'exams:enroll_student' course.course_id %}" class="btn btn-primary">
+                    <i class="bi bi-person-plus"></i> Enroll Student
+                </a>
+                <a href="{% url 'exams:bulk_enroll' course.course_id %}" class="btn btn-success">
+                    <i class="bi bi-file-plus"></i> Bulk Enroll
+                </a>
+            </div>
+            {% endif %}
+            <a href="{% url 'exams:course_detail' course.course_id %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Course
+            </a>
+        </div>
+    </div>
+
+    <!-- Bulk Enrollment Results (if any) -->
+    {% if bulk_results %}
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        <h5 class="alert-heading">Bulk Enrollment Results</h5>
+        {% if bulk_results.success %}
+        <p class="mb-1">✅ Successfully enrolled: {{ bulk_results.success|length }} student(s)</p>
+        <ul class="small">
+            {% for student in bulk_results.success %}
+            <li>{{ student }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        
+        {% if bulk_results.already_enrolled %}
+        <p class="mb-1">⚠️ Already enrolled: {{ bulk_results.already_enrolled|length }} student(s)</p>
+        {% endif %}
+        
+        {% if bulk_results.not_found %}
+        <p class="mb-1">❌ Not found: {{ bulk_results.not_found|length }} student(s)</p>
+        {% endif %}
+        
+        {% if bulk_results.not_students %}
+        <p class="mb-1">❌ Not student accounts: {{ bulk_results.not_students|length }} user(s)</p>
+        {% endif %}
+        
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <!-- Search Bar -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <form method="get" class="d-flex">
+                <div class="input-group">
+                    <span class="input-group-text bg-white">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" 
+                           name="search" 
+                           class="form-control" 
+                           placeholder="Search by name or email..." 
+                           value="{{ search_query }}">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                    {% if search_query %}
+                    <a href="{% url 'exams:course_students' course.course_id %}" class="btn btn-outline-secondary">Clear</a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Students Table -->
+    {% if enrollments %}
+    <div class="card shadow">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Email</th>
+                            <th>Enrolled Since</th>
+                            {% if can_manage %}
+                            <th>Actions</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for enrollment in enrollments %}
+                        <tr>
+                            <td>
+                                <i class="bi bi-person-circle me-2"></i>
+                                {{ enrollment.student.get_full_name|default:"—" }}
+                            </td>
+                            <td>{{ enrollment.student.email }}</td>
+                            <td>{{ enrollment.enrolled_at|date:"M d, Y" }}</td>
+                            {% if can_manage %}
+                            <td>
+                                <form method="post" 
+                                      action="{% url 'exams:unenroll_student' course.course_id enrollment.student.id %}"
+                                      class="d-inline"
+                                      onsubmit="return confirm('Are you sure you want to unenroll {{ enrollment.student.email }}?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Unenroll">
+                                        <i class="bi bi-person-x"></i> Unenroll
+                                    </button>
+                                </form>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-people" style="font-size: 4rem; color: #dee2e6;"></i>
+        <h4 class="mt-3">No Students Enrolled</h4>
+        <p class="text-muted">
+            {% if search_query %}
+                No students match your search.
+            {% elif can_manage %}
+                Start by enrolling students to this course.
+            {% else %}
+                No students are enrolled in this course yet.
+            {% endif %}
+        </p>
+        {% if can_manage and not search_query %}
+        <a href="{% url 'exams:enroll_student' course.course_id %}" class="btn btn-primary">
+            <i class="bi bi-person-plus"></i> Enroll First Student
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+{% block extra_js %}
+<script>
+// Optional: Add any JavaScript for additional functionality
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-hide alerts after 5 seconds
+    setTimeout(function() {
+        const alerts = document.querySelectorAll('.alert-dismissible');
+        alerts.forEach(function(alert) {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        });
+    }, 5000);
+});
+</script>
+{% endblock %}
+{% endblock %}

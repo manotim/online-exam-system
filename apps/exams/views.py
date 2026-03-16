@@ -9,6 +9,9 @@ from .models import Exam, Question, Submission, Answer, Course
 from apps.grading.services import AutoGradingService
 from django.db.models import Q, Count
 from .models import Course, Enrollment
+from django.http import JsonResponse
+from .forms import EnrollmentForm, BulkEnrollmentForm
+from apps.users.models import CustomUser
 from .forms import CourseForm, CourseFilterForm
 from apps.users.models import Institution
 from django.db import models
@@ -154,6 +157,19 @@ def take_exam(request, exam_id):
     if user.role != 'STUDENT':
         return redirect('exams:exam_detail', exam_id=exam_id)
     
+    # AUTO-ENROLL STUDENT IF NOT ALREADY ENROLLED
+    if exam.course:  # If exam belongs to a course
+        from .models import Enrollment
+        enrollment, created = Enrollment.objects.get_or_create(
+            student=user,
+            course=exam.course,
+            defaults={'is_active': True}
+        )
+        if created:
+            print(f"DEBUG: Auto-enrolled {user.email} in {exam.course.title}")
+            # Optional: Add a success message for first-time enrollment
+            # messages.info(request, f'You have been automatically enrolled in {exam.course.title}')
+    
     # USE UTILITY FOR VALIDATION
     is_valid, message = validate_exam_timing(exam, user)
     if not is_valid:
@@ -247,6 +263,119 @@ def take_exam(request, exam_id):
         context['time_remaining'] = calculate_time_remaining(exam, submission)
     
     return render(request, 'exams/very_simple_take_exam.html', context)
+
+
+
+@login_required
+def edit_exam(request, exam_id):
+    """Edit an existing exam"""
+    exam = get_object_or_404(Exam, exam_id=exam_id)
+    
+    # Check permissions
+    if request.user.role not in ['ADMIN'] and (request.user.role == 'INSTRUCTOR' and exam.instructor != request.user):
+        messages.error(request, 'You do not have permission to edit this exam.')
+        return redirect('exams:exam_list')
+    
+    # For now, redirect to admin
+    messages.info(request, 'Redirecting to admin panel to edit exam.')
+    return redirect(f'/admin/exams/exam/{exam_id}/change/')
+
+
+@login_required
+def delete_exam(request, exam_id):
+    """Delete an exam"""
+    exam = get_object_or_404(Exam, exam_id=exam_id)
+    
+    # Check permissions
+    if request.user.role not in ['ADMIN'] and (request.user.role == 'INSTRUCTOR' and exam.instructor != request.user):
+        messages.error(request, 'You do not have permission to delete this exam.')
+        return redirect('exams:exam_list')
+    
+    if request.method == 'POST':
+        exam_title = exam.title
+        exam.delete()
+        messages.success(request, f'Exam "{exam_title}" deleted successfully!')
+        return redirect('exams:exam_list')
+    
+    context = {
+        'exam': exam,
+    }
+    return render(request, 'exams/exam_confirm_delete.html', context)
+
+
+@login_required
+def past_exams(request):
+    """Display list of exams whose end date has passed for the student"""
+    user = request.user
+    
+    # Only students can access this view
+    if user.role != 'STUDENT':
+        messages.error(request, 'Only students can view past exams.')
+        return redirect('exams:exam_list')
+    
+    # Get current time
+    now = timezone.now()
+    
+    # Get all exams that have ended (end_date < now) and are published
+    # Also filter by courses the student is enrolled in OR has submissions for
+    from django.db.models import Q
+    
+    # Get exams from enrolled courses OR exams the student has already taken
+    past_exams = Exam.objects.filter(
+        Q(end_date__lt=now) &  # End date has passed
+        Q(is_published=True) &  # Must be published
+        (
+            Q(course__enrollment__student=user, course__enrollment__is_active=True) |  # Student enrolled in course
+            Q(submissions__student=user)  # Student has a submission (even if not enrolled)
+        )
+    ).distinct().order_by('-end_date')
+    
+    # Get submission status for each exam
+    for exam in past_exams:
+        # Check if student has a submission for this exam
+        submission = Submission.objects.filter(
+            exam=exam, 
+            student=user
+        ).first()
+        
+        exam.student_submission = submission
+        exam.has_submission = submission is not None
+        exam.was_submitted = submission and submission.submitted_at is not None
+        
+        # Calculate score if graded
+        if submission and submission.is_graded and submission.total_score:
+            exam.score = submission.total_score
+            exam.percentage = (submission.total_score / exam.total_points * 100) if exam.total_points else 0
+        else:
+            exam.score = None
+            exam.percentage = None
+    
+    # Apply filters from request
+    filter_type = request.GET.get('filter', 'all')
+    
+    if filter_type == 'submitted':
+        past_exams = [e for e in past_exams if e.was_submitted]
+    elif filter_type == 'missed':
+        past_exams = [e for e in past_exams if not e.was_submitted]
+    elif filter_type == 'graded':
+        past_exams = [e for e in past_exams if e.student_submission and e.student_submission.is_graded]
+    
+    # Get search query
+    search_query = request.GET.get('search', '')
+    if search_query:
+        past_exams = [e for e in past_exams if 
+                     search_query.lower() in e.title.lower() or 
+                     (e.course and search_query.lower() in e.course.title.lower())]
+    
+    context = {
+        'past_exams': past_exams,
+        'total_exams': len(past_exams),
+        'filter_type': filter_type,
+        'search_query': search_query,
+        'now': now,
+    }
+    
+    return render(request, 'exams/past_exams.html', context)
 
 
 # Placeholder functions for edit and delete
@@ -544,3 +673,252 @@ def submissions_for_exam(request, exam_id):
     }
     
     return render(request, 'exams/submissions_for_exam.html', context)
+
+
+
+@login_required
+def enroll_student(request, course_id):
+    """Enroll a single student in a course"""
+    course = get_object_or_404(Course, course_id=course_id)
+    
+    # Check permissions (only instructor of this course or admin can enroll)
+    if request.user.role not in ['ADMIN'] and (request.user.role == 'INSTRUCTOR' and course.instructor != request.user):
+        messages.error(request, 'You do not have permission to enroll students in this course.')
+        return redirect('exams:course_detail', course_id=course_id)
+    
+    if request.method == 'POST':
+        form = EnrollmentForm(request.POST, course=course)
+        if form.is_valid():
+            email = form.cleaned_data['student_email']
+            student = CustomUser.objects.get(email=email, role='STUDENT')
+            
+            # Create enrollment
+            enrollment, created = Enrollment.objects.get_or_create(
+                student=student,
+                course=course,
+                defaults={'is_active': True}
+            )
+            
+            if not created and not enrollment.is_active:
+                # Reactivate if previously unenrolled
+                enrollment.is_active = True
+                enrollment.save()
+                messages.success(request, f'{student.email} has been re-enrolled in {course.title}.')
+            elif created:
+                messages.success(request, f'{student.email} has been enrolled in {course.title}.')
+            
+            # For AJAX requests
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'message': f'{student.email} enrolled successfully',
+                    'student': {
+                        'id': str(student.id),
+                        'email': student.email,
+                        'name': student.get_full_name() or student.email
+                    }
+                })
+            
+            return redirect('exams:course_students', course_id=course_id)
+        else:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+    
+    else:
+        form = EnrollmentForm(course=course)
+    
+    context = {
+        'course': course,
+        'form': form,
+        'is_single': True,
+    }
+    
+    return render(request, 'exams/enroll_student.html', context)
+
+
+@login_required
+def bulk_enroll(request, course_id):
+    """Bulk enroll multiple students"""
+    course = get_object_or_404(Course, course_id=course_id)
+    
+    # Check permissions
+    if request.user.role not in ['ADMIN'] and (request.user.role == 'INSTRUCTOR' and course.instructor != request.user):
+        messages.error(request, 'You do not have permission to enroll students in this course.')
+        return redirect('exams:course_detail', course_id=course_id)
+    
+    if request.method == 'POST':
+        form = BulkEnrollmentForm(request.POST)
+        if form.is_valid():
+            emails_text = form.cleaned_data['student_emails']
+            emails = [email.strip() for email in emails_text.split('\n') if email.strip()]
+            
+            results = {
+                'success': [],
+                'not_found': [],
+                'already_enrolled': [],
+                'not_students': []
+            }
+            
+            for email in emails:
+                try:
+                    student = CustomUser.objects.get(email=email)
+                    
+                    if student.role != 'STUDENT':
+                        results['not_students'].append(email)
+                        continue
+                    
+                    enrollment, created = Enrollment.objects.get_or_create(
+                        student=student,
+                        course=course,
+                        defaults={'is_active': True}
+                    )
+                    
+                    if not created and not enrollment.is_active:
+                        enrollment.is_active = True
+                        enrollment.save()
+                        results['success'].append(f"{email} (re-enrolled)")
+                    elif created:
+                        results['success'].append(email)
+                    else:
+                        results['already_enrolled'].append(email)
+                        
+                except CustomUser.DoesNotExist:
+                    results['not_found'].append(email)
+            
+            # Create summary message
+            summary = []
+            if results['success']:
+                summary.append(f"✅ Enrolled: {len(results['success'])} student(s)")
+            if results['already_enrolled']:
+                summary.append(f"⚠️ Already enrolled: {len(results['already_enrolled'])}")
+            if results['not_found']:
+                summary.append(f"❌ Not found: {len(results['not_found'])}")
+            if results['not_students']:
+                summary.append(f"❌ Not students: {len(results['not_students'])}")
+            
+            messages.info(request, ' | '.join(summary))
+            
+            # Store results in session for display
+            request.session['bulk_enroll_results'] = results
+            
+            return redirect('exams:course_students', course_id=course_id)
+    else:
+        form = BulkEnrollmentForm()
+    
+    context = {
+        'course': course,
+        'form': form,
+        'is_bulk': True,
+    }
+    
+    return render(request, 'exams/bulk_enroll.html', context)
+
+
+
+@login_required
+def unenroll_student(request, course_id, student_id):
+    """Remove a student from a course"""
+    course = get_object_or_404(Course, course_id=course_id)
+    # student_id is now an integer, not UUID
+    student = get_object_or_404(CustomUser, id=student_id)
+    
+    # Check permissions
+    if request.user.role not in ['ADMIN'] and (request.user.role == 'INSTRUCTOR' and course.instructor != request.user):
+        messages.error(request, 'You do not have permission to unenroll students from this course.')
+        return redirect('exams:course_detail', course_id=course_id)
+    
+    if request.method == 'POST':
+        enrollment = get_object_or_404(Enrollment, student=student, course=course)
+        enrollment.is_active = False
+        enrollment.save()
+        
+        messages.success(request, f'{student.email} has been unenrolled from {course.title}.')
+        
+        # For AJAX requests
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': True})
+        
+        return redirect('exams:course_students', course_id=course_id)
+    
+    context = {
+        'course': course,
+        'student': student,
+    }
+    
+    return render(request, 'exams/unenroll_confirm.html', context)
+
+
+@login_required
+def course_students(request, course_id):
+    """View and manage students enrolled in a course"""
+    course = get_object_or_404(Course, course_id=course_id)
+    
+    # Check permissions
+    if request.user.role == 'STUDENT':
+        # Students can only see if they're enrolled
+        if not Enrollment.objects.filter(student=request.user, course=course, is_active=True).exists():
+            messages.error(request, 'You are not enrolled in this course.')
+            return redirect('exams:course_list')
+    elif request.user.role == 'INSTRUCTOR' and course.instructor != request.user:
+        messages.error(request, 'You do not have permission to view students in this course.')
+        return redirect('exams:course_list')
+    
+    # Get active enrollments
+    enrollments = Enrollment.objects.filter(
+        course=course, 
+        is_active=True
+    ).select_related('student').order_by('student__email')
+    
+    # Get bulk enrollment results from session (if any)
+    bulk_results = request.session.pop('bulk_enroll_results', None)
+    
+    # Get search query
+    search_query = request.GET.get('search', '')
+    if search_query:
+        enrollments = enrollments.filter(
+            Q(student__email__icontains=search_query) |
+            Q(student__first_name__icontains=search_query) |
+            Q(student__last_name__icontains=search_query)
+        )
+    
+    context = {
+        'course': course,
+        'enrollments': enrollments,
+        'total_students': enrollments.count(),
+        'search_query': search_query,
+        'can_manage': request.user.role in ['ADMIN'] or (request.user.role == 'INSTRUCTOR' and course.instructor == request.user),
+        'bulk_results': bulk_results,
+    }
+    
+    return render(request, 'exams/course_students.html', context)
+
+
+@login_required
+def verify_enrollment(request):
+    """AJAX endpoint to verify if a student exists before enrolling"""
+    if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'error': 'Invalid request'}, status=400)
+    
+    email = request.GET.get('email')
+    course_id = request.GET.get('course_id')
+    
+    if not email or not course_id:
+        return JsonResponse({'error': 'Missing parameters'}, status=400)
+    
+    try:
+        student = CustomUser.objects.get(email=email, role='STUDENT')
+        course = Course.objects.get(course_id=course_id)
+        
+        # Check if already enrolled
+        is_enrolled = Enrollment.objects.filter(student=student, course=course, is_active=True).exists()
+        
+        return JsonResponse({
+            'exists': True,
+            'name': student.get_full_name() or student.email,
+            'email': student.email,
+            'is_enrolled': is_enrolled
+        })
+    except CustomUser.DoesNotExist:
+        return JsonResponse({'exists': False})
+    except Course.DoesNotExist:
+        return JsonResponse({'error': 'Course not found'}, status=404)

@@ -1,0 +1,56 @@
+<!-- templates/exams/bulk_enroll.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Bulk Enroll Students - {{ course.title }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-file-plus"></i> Bulk Enroll Students
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <h5 class="mb-3">{{ course.code }} - {{ course.title }}</h5>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        Enter one email address per line. Only students with existing accounts will be enrolled.
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.student_emails.id_for_label }}" class="form-label">
+                                Student Emails <span class="text-danger">*</span>
+                            </label>
+                            {{ form.student_emails }}
+                            {% if form.student_emails.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in form.student_emails.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{% url 'exams:course_students' course.course_id %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Back
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-check-circle"></i> Enroll All
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

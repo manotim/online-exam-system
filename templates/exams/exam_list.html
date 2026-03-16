@@ -1,95 +1,427 @@
 <!-- templates/exams/exam_list.html -->
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Exams{% endblock %}
+{% block title %}Exams - Online Exam System{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Exams</h1>
-    {% if user.role == 'INSTRUCTOR' or user.role == 'ADMIN' %}
-        <a href="{% url 'exams:create_exam' %}" class="btn btn-primary">
-            <i class="bi bi-plus-circle"></i> Create New Exam
-        </a>
-    {% endif %}
-</div>
-
-<div class="row">
-    {% for exam in exams %}
-    <div class="col-md-6 mb-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <h5 class="card-title">{{ exam.title }}</h5>
-                        {% if exam.course %}
-                            <h6 class="card-subtitle mb-2 text-muted">{{ exam.course.code }} - {{ exam.course.title }}</h6>
-                        {% endif %}
-                    </div>
-                    <div class="text-end">
-                        <span class="badge bg-{% if exam.is_published %}success{% else %}warning{% endif %}">
-                            {% if exam.is_published %}Published{% else %}Draft{% endif %}
-                        </span>
-                    </div>
-                </div>
-                
-                <p class="card-text">{{ exam.description|truncatewords:30 }}</p>
-                
-                <div class="mb-3">
-                    <span class="badge bg-info">{{ exam.total_points }} points</span>
-                    {% if exam.time_limit_minutes %}
-                        <span class="badge bg-secondary">{{ exam.time_limit_minutes }} mins</span>
-                    {% endif %}
-                    <span class="badge bg-dark">{{ exam.questions.count }} questions</span>
-                </div>
-                
-                <div class="small text-muted">
-                    <p class="mb-1">
-                        <i class="bi bi-calendar"></i> 
-                        {{ exam.start_date|date:"M d, Y H:i" }} - {{ exam.end_date|date:"M d, Y H:i" }}
-                    </p>
-                    <p class="mb-0">
-                        <i class="bi bi-person"></i> Instructor: {{ exam.instructor.email }}
-                    </p>
-                </div>
-            </div>
-            <div class="card-footer bg-transparent">
-                <a href="{% url 'exams:exam_detail' exam.exam_id %}" class="btn btn-outline-primary btn-sm">
-                    View Details
-                </a>
-                
-                {% if user.role == 'STUDENT' and exam.is_published %}
-                    {% if now >= exam.start_date and now <= exam.end_date %}
-                        <a href="{% url 'exams:take_exam' exam.exam_id %}" class="btn btn-primary btn-sm">
-                            Take Exam
-                        </a>
-                    {% elif now < exam.start_date %}
-                        <span class="text-muted">Starts soon</span>
-                    {% else %}
-                        <span class="text-muted">Ended</span>
-                    {% endif %}
+<div class="container-fluid py-4">
+    <!-- Header Section -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2 class="display-6 fw-bold">
+                <i class="bi bi-pencil-square text-primary me-2"></i> 
+                {% if user.role == 'INSTRUCTOR' %}
+                    My Exams
+                {% elif user.role == 'STUDENT' %}
+                    Available Exams
+                {% else %}
+                    All Exams
                 {% endif %}
-                
-                {% if user.role == 'INSTRUCTOR' or user.role == 'ADMIN' %}
-                    <a href="/admin/exams/exam/{{ exam.exam_id }}/change/" class="btn btn-outline-secondary btn-sm">
-                        Edit
-                    </a>
+            </h2>
+            <p class="text-muted lead small">
+                {% if user.role == 'INSTRUCTOR' %}
+                    Manage and monitor your created exams
+                {% elif user.role == 'STUDENT' %}
+                    Browse and take available exams
+                {% else %}
+                    View all exams in the system
                 {% endif %}
-            </div>
+            </p>
         </div>
-    </div>
-    {% empty %}
-    <div class="col-12">
-        <div class="alert alert-info">
-            <i class="bi bi-info-circle"></i>
+        <div class="col-md-4 text-end">
+            {% if user.role == 'INSTRUCTOR' or user.role == 'ADMIN' %}
+            <a href="{% url 'exams:create_exam' %}" class="btn btn-primary btn-lg">
+                <i class="bi bi-plus-circle"></i> Create New Exam
+            </a>
+            {% endif %}
             {% if user.role == 'STUDENT' %}
-                No exams available at the moment. Please check back later.
-            {% else %}
-                No exams found. 
-                <a href="{% url 'exams:create_exam' %}">Create your first exam</a> 
-                or check the <a href="/admin/exams/exam/add/">admin panel</a>.
+            <a href="{% url 'exams:past_exams' %}" class="btn btn-outline-secondary btn-lg">
+                <i class="bi bi-clock-history"></i> View Past Exams
+            </a>
             {% endif %}
         </div>
     </div>
-    {% endfor %}
+
+    <!-- Statistics Cards -->
+    {% if exams %}
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card stat-card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white-50 mb-1">Total Exams</h6>
+                            <h3 class="mb-0">{{ exams|length }}</h3>
+                        </div>
+                        <i class="bi bi-pencil-square fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white-50 mb-1">Published</h6>
+                            <h3 class="mb-0">{{ exams|length }}</h3>
+                        </div>
+                        <i class="bi bi-check-circle fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white-50 mb-1">Active Now</h6>
+                            <h3 class="mb-0">{{ exams|length }}</h3>
+                        </div>
+                        <i class="bi bi-play-circle fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white-50 mb-1">Upcoming</h6>
+                            <h3 class="mb-0">{{ exams|length }}</h3>
+                        </div>
+                        <i class="bi bi-calendar-event fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Search and Filter Section -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="btn-group" role="group">
+                <a href="?filter=all" class="btn btn-outline-primary {% if filter_type == 'all' or not filter_type %}active{% endif %}">
+                    <i class="bi bi-list"></i> All
+                </a>
+                {% if user.role == 'STUDENT' %}
+                <a href="?filter=available" class="btn btn-outline-success {% if filter_type == 'available' %}active{% endif %}">
+                    <i class="bi bi-play-circle"></i> Available
+                </a>
+                <a href="?filter=upcoming" class="btn btn-outline-warning {% if filter_type == 'upcoming' %}active{% endif %}">
+                    <i class="bi bi-calendar"></i> Upcoming
+                </a>
+                <a href="?filter=published" class="btn btn-outline-info {% if filter_type == 'published' %}active{% endif %}">
+                    <i class="bi bi-check-circle"></i> Published
+                </a>
+                {% endif %}
+                {% if user.role == 'INSTRUCTOR' %}
+                <a href="?filter=draft" class="btn btn-outline-secondary {% if filter_type == 'draft' %}active{% endif %}">
+                    <i class="bi bi-file-earmark"></i> Drafts
+                </a>
+                <a href="?filter=published" class="btn btn-outline-success {% if filter_type == 'published' %}active{% endif %}">
+                    <i class="bi bi-check-circle"></i> Published
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-md-4">
+            <form method="get" class="d-flex">
+                <input type="hidden" name="filter" value="{{ filter_type|default:'all' }}">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0">
+                        <i class="bi bi-search text-primary"></i>
+                    </span>
+                    <input type="text" 
+                           name="search" 
+                           class="form-control border-start-0 ps-0" 
+                           placeholder="Search exams by title, course..." 
+                           value="{{ search_query }}"
+                           style="border-left: none;">
+                    <button type="submit" class="btn btn-primary">
+                        Search
+                    </button>
+                    {% if search_query %}
+                    <a href="?filter={{ filter_type|default:'all' }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-x"></i> Clear
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Exams Grid -->
+    {% if exams %}
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        {% for exam in exams %}
+        <div class="col">
+            <div class="card h-100 shadow-sm hover-card">
+                <!-- Card Header with Status -->
+                <div class="card-header bg-white border-bottom-0 pt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="badge {% if exam.is_published %}bg-success{% else %}bg-secondary{% endif %} px-3 py-2">
+                            <i class="bi bi-{% if exam.is_published %}check-circle{% else %}file-earmark{% endif %} me-1"></i>
+                            {{ exam.is_published|yesno:"Published,Draft" }}
+                        </span>
+                        {% if user.role == 'INSTRUCTOR' and exam.instructor == user or user.role == 'ADMIN' %}
+                        <div class="dropdown">
+                            <button class="btn btn-link text-dark p-0" type="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-three-dots-vertical"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'exams:edit_exam' exam.exam_id %}">
+                                        <i class="bi bi-pencil me-2"></i>Edit
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item text-danger" href="{% url 'exams:delete_exam' exam.exam_id %}">
+                                        <i class="bi bi-trash me-2"></i>Delete
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Card Body -->
+                <div class="card-body pt-2">
+                    <h5 class="card-title fw-bold mb-1">{{ exam.title }}</h5>
+                    
+                    {% if exam.course %}
+                    <p class="text-muted small mb-2">
+                        <i class="bi bi-book"></i> {{ exam.course.title }} ({{ exam.course.code }})
+                    </p>
+                    {% endif %}
+                    
+                    <p class="card-text text-muted small">
+                        {{ exam.description|truncatewords:20|default:"No description available." }}
+                    </p>
+                    
+                    <!-- Exam Details Grid -->
+                    <div class="row mt-3 g-2">
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center bg-light">
+                                <i class="bi bi-calendar text-primary"></i>
+                                <div class="small text-muted">Start</div>
+                                <strong class="small">{{ exam.start_date|date:"M d, Y" }}</strong>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center bg-light">
+                                <i class="bi bi-calendar-check text-danger"></i>
+                                <div class="small text-muted">End</div>
+                                <strong class="small">{{ exam.end_date|date:"M d, Y" }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-2 g-2">
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center bg-light">
+                                <i class="bi bi-hourglass-split text-warning"></i>
+                                <div class="small text-muted">Duration</div>
+                                <strong class="small">{{ exam.time_limit_minutes|default:"No limit" }} min</strong>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center bg-light">
+                                <i class="bi bi-star text-success"></i>
+                                <div class="small text-muted">Points</div>
+                                <strong class="small">{{ exam.total_points }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Additional Info -->
+                    <div class="mt-3 d-flex justify-content-between align-items-center">
+                        <span class="small text-muted">
+                            <i class="bi bi-question-circle"></i> {{ exam.questions.count }} questions
+                        </span>
+                        {% if user.role == 'INSTRUCTOR' %}
+                        <span class="small text-muted">
+                            <i class="bi bi-people"></i> {{ exam.submissions.count }} submissions
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Card Footer -->
+                <div class="card-footer bg-white border-top-0 pb-3">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'exams:exam_detail' exam.exam_id %}" 
+                           class="btn btn-outline-primary">
+                            <i class="bi bi-eye"></i> View Details
+                        </a>
+                        
+                        {% if user.role == 'STUDENT' and exam.is_published %}
+                            {% if now < exam.start_date %}
+                            <button class="btn btn-secondary" disabled>
+                                <i class="bi bi-clock"></i> Not Started
+                            </button>
+                            {% elif now > exam.end_date %}
+                            <a href="{% url 'exams:exam_detail' exam.exam_id %}" 
+                               class="btn btn-info">
+                                <i class="bi bi-file-text"></i> View Results
+                            </a>
+                            {% else %}
+                            <a href="{% url 'exams:take_exam' exam.exam_id %}" 
+                               class="btn btn-success">
+                                <i class="bi bi-play-circle"></i> Start Exam
+                            </a>
+                            {% endif %}
+                        {% endif %}
+                        
+                        {% if user.role == 'INSTRUCTOR' and exam.instructor == user %}
+                        <div class="btn-group">
+                            <a href="{% url 'grading:submissions_list' %}?exam={{ exam.exam_id }}" 
+                               class="btn btn-sm btn-outline-info">
+                                <i class="bi bi-journal-check"></i> Submissions
+                            </a>
+                            <a href="{% url 'grading:exam_analytics' exam.exam_id %}" 
+                               class="btn btn-sm btn-outline-warning">
+                                <i class="bi bi-graph-up"></i> Analytics
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    {% else %}
+    <!-- Empty State -->
+    <div class="text-center py-5">
+        <div class="mb-4">
+            <i class="bi bi-pencil-square" style="font-size: 5rem; color: #dee2e6;"></i>
+        </div>
+        <h4>No Exams Found</h4>
+        <p class="text-muted">
+            {% if search_query %}
+                No exams match "{{ search_query }}"
+            {% elif user.role == 'INSTRUCTOR' %}
+                You haven't created any exams yet. Click "Create New Exam" to get started.
+            {% elif user.role == 'STUDENT' %}
+                There are no available exams at the moment. Check back later.
+            {% else %}
+                No exams have been created yet.
+            {% endif %}
+        </p>
+        {% if user.role == 'INSTRUCTOR' %}
+        <a href="{% url 'exams:create_exam' %}" class="btn btn-primary btn-lg">
+            <i class="bi bi-plus-circle"></i> Create Your First Exam
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
 </div>
+
+<!-- Custom CSS for this page -->
+<style>
+    .hover-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        border: none;
+        border-radius: 15px;
+        overflow: hidden;
+    }
+    .hover-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15) !important;
+    }
+    .stat-card {
+        border: none;
+        border-radius: 15px;
+        transition: transform 0.2s;
+    }
+    .stat-card:hover {
+        transform: scale(1.02);
+    }
+    .bg-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .bg-success {
+        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+    .bg-warning {
+        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+    .bg-info {
+        background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+    }
+    .card-header {
+        background: transparent;
+    }
+    .btn-group .btn {
+        border-radius: 20px;
+        margin: 0 2px;
+    }
+    .input-group-text {
+        border-radius: 20px 0 0 20px;
+    }
+    .form-control {
+        border-radius: 0 20px 20px 0;
+    }
+    .btn-primary {
+        border-radius: 20px;
+        padding: 0.375rem 1.5rem;
+    }
+    .badge {
+        border-radius: 20px;
+    }
+</style>
+
+<!-- JavaScript for dynamic filtering -->
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
+
+    // Auto-submit search after typing (optional - with debounce)
+    let searchTimeout;
+    const searchInput = document.querySelector('input[name="search"]');
+    if (searchInput) {
+        searchInput.addEventListener('keyup', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                this.form.submit();
+            }, 1000);
+        });
+    }
+
+    // Add animation to stat cards
+    const statCards = document.querySelectorAll('.stat-card');
+    statCards.forEach((card, index) => {
+        card.style.animation = `fadeInUp 0.5s ease forwards ${index * 0.1}s`;
+    });
+});
+
+// Add keyframe animation
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}
 {% endblock %}

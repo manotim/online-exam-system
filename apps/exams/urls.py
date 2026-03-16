@@ -9,16 +9,26 @@ app_name = 'exams'
 urlpatterns = [
     # Existing Exam URLs
     path('', views.exam_list, name='exam_list'),
+    path('past-exams/', views.past_exams, name='past_exams'),
     path('create/', views.create_exam, name='create_exam'),
+    path('<uuid:exam_id>/edit/', views.edit_exam, name='edit_exam'),
+    path('<uuid:exam_id>/delete/', views.delete_exam, name='delete_exam'),
     path('<uuid:exam_id>/', views.exam_detail, name='exam_detail'),
     path('<uuid:exam_id>/take/', views.take_exam, name='take_exam'),
     
-    # NEW COURSE URLs
+    # Course URLs
     path('courses/', views.course_list, name='course_list'),
     path('courses/create/', views.course_create, name='course_create'),
     path('courses/<uuid:course_id>/', views.course_detail, name='course_detail'),
     path('courses/<uuid:course_id>/edit/', views.course_edit, name='course_edit'),
     path('courses/<uuid:course_id>/delete/', views.course_delete, name='course_delete'),
+    
+    # Enrollment URLs - NEW
+    path('courses/<uuid:course_id>/enroll/', views.enroll_student, name='enroll_student'),
+    path('courses/<uuid:course_id>/enroll/bulk/', views.bulk_enroll, name='bulk_enroll'),
+    path('courses/<uuid:course_id>/unenroll/<int:student_id>/', views.unenroll_student, name='unenroll_student'),
+    path('courses/<uuid:course_id>/students/', views.course_students, name='course_students'),
+    path('courses/enrollment/verify/', views.verify_enrollment, name='verify_enrollment'),
     
     # Plagiarism URLs
     path('plagiarism/', views_plagiarism.plagiarism_dashboard, name='plagiarism_dashboard'),

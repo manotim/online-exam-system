@@ -1,0 +1,220 @@
+<!-- templates/exams/past_exams.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Past Exams{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2>
+                <i class="bi bi-clock-history"></i> Past Exams
+                <small class="text-muted">{{ total_exams }} exam{{ total_exams|pluralize }}</small>
+            </h2>
+            <p class="text-muted">Exams that have ended. You can review your submissions and results.</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{% url 'exams:exam_list' %}" class="btn btn-outline-primary">
+                <i class="bi bi-pencil-square"></i> Available Exams
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters and Search -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="btn-group" role="group">
+                <a href="?filter=all{% if search_query %}&search={{ search_query }}{% endif %}" 
+                   class="btn btn-outline-secondary {% if filter_type == 'all' %}active{% endif %}">
+                    All
+                </a>
+                <a href="?filter=submitted{% if search_query %}&search={{ search_query }}{% endif %}" 
+                   class="btn btn-outline-success {% if filter_type == 'submitted' %}active{% endif %}">
+                    <i class="bi bi-check-circle"></i> Submitted
+                </a>
+                <a href="?filter=missed{% if search_query %}&search={{ search_query }}{% endif %}" 
+                   class="btn btn-outline-danger {% if filter_type == 'missed' %}active{% endif %}">
+                    <i class="bi bi-x-circle"></i> Missed
+                </a>
+                <a href="?filter=graded{% if search_query %}&search={{ search_query }}{% endif %}" 
+                   class="btn btn-outline-info {% if filter_type == 'graded' %}active{% endif %}">
+                    <i class="bi bi-check2-all"></i> Graded
+                </a>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <form method="get" class="d-flex">
+                <input type="hidden" name="filter" value="{{ filter_type }}">
+                <div class="input-group">
+                    <input type="text" 
+                           name="search" 
+                           class="form-control" 
+                           placeholder="Search exams..." 
+                           value="{{ search_query }}">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i>
+                    </button>
+                    {% if search_query %}
+                    <a href="?filter={{ filter_type }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-x"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Past Exams List -->
+    {% if past_exams %}
+    <div class="row">
+        {% for exam in past_exams %}
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 shadow-sm {% if exam.was_submitted %}border-success{% else %}border-danger{% endif %}">
+                <!-- Card Header -->
+                <div class="card-header {% if exam.was_submitted %}bg-success{% else %}bg-danger{% endif %} text-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="bi bi-calendar-check me-2"></i>
+                        Ended: {{ exam.end_date|date:"M d, Y" }}
+                    </h6>
+                    {% if exam.was_submitted %}
+                    <span class="badge bg-light text-success">Submitted</span>
+                    {% else %}
+                    <span class="badge bg-light text-danger">Missed</span>
+                    {% endif %}
+                </div>
+                
+                <!-- Card Body -->
+                <div class="card-body">
+                    <h5 class="card-title">{{ exam.title }}</h5>
+                    
+                    {% if exam.course %}
+                    <p class="text-muted small">
+                        <i class="bi bi-book"></i> {{ exam.course.title }} ({{ exam.course.code }})
+                    </p>
+                    {% endif %}
+                    
+                    <p class="card-text">{{ exam.description|truncatewords:20|default:"No description available." }}</p>
+                    
+                    <!-- Exam Details -->
+                    <div class="row mt-3 mb-3">
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <i class="bi bi-calendar-range text-primary"></i>
+                                <div><small>Started</small></div>
+                                <strong>{{ exam.start_date|date:"M d" }}</strong>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2 text-center">
+                                <i class="bi bi-hourglass-split text-warning"></i>
+                                <div><small>Duration</small></div>
+                                <strong>{{ exam.time_limit_minutes|default:"No limit" }} min</strong>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Score Information -->
+                    {% if exam.student_submission %}
+                        {% if exam.student_submission.is_graded and exam.score %}
+                        <div class="alert alert-success py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-trophy"></i> Your Score:</span>
+                                <strong>{{ exam.score|floatformat:1 }}/{{ exam.total_points|floatformat:0 }}</strong>
+                                <span class="badge bg-success">{{ exam.percentage|floatformat:1 }}%</span>
+                            </div>
+                        </div>
+                        {% elif exam.student_submission.submitted_at %}
+                        <div class="alert alert-info py-2">
+                            <i class="bi bi-info-circle"></i> Submitted on {{ exam.student_submission.submitted_at|date:"M d, Y H:i" }}
+                            <br>
+                            <small>Awaiting grading</small>
+                        </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="alert alert-warning py-2">
+                            <i class="bi bi-exclamation-triangle"></i> You did not take this exam.
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Card Footer -->
+                <div class="card-footer bg-transparent">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">
+                            <i class="bi bi-question-circle"></i> {{ exam.questions.count }} questions
+                        </small>
+                        <a href="{% url 'exams:exam_detail' exam.exam_id %}" 
+                           class="btn btn-sm btn-outline-primary">
+                            {% if exam.student_submission %}
+                                <i class="bi bi-eye"></i> Review
+                            {% else %}
+                                <i class="bi bi-info-circle"></i> Details
+                            {% endif %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Pagination if needed -->
+    {% if past_exams.paginator.num_pages > 1 %}
+    <nav aria-label="Page navigation" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if past_exams.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1{% if filter_type %}&filter={{ filter_type }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}">
+                    First
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ past_exams.previous_page_number }}{% if filter_type %}&filter={{ filter_type }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}">
+                    Previous
+                </a>
+            </li>
+            {% endif %}
+            
+            <li class="page-item active">
+                <span class="page-link">Page {{ past_exams.number }} of {{ past_exams.paginator.num_pages }}</span>
+            </li>
+            
+            {% if past_exams.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ past_exams.next_page_number }}{% if filter_type %}&filter={{ filter_type }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}">
+                    Next
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ past_exams.paginator.num_pages }}{% if filter_type %}&filter={{ filter_type }}{% endif %}{% if search_query %}&search={{ search_query }}{% endif %}">
+                    Last
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+    
+    {% else %}
+    <!-- Empty State -->
+    <div class="text-center py-5">
+        <div class="mb-4">
+            <i class="bi bi-clock-history" style="font-size: 5rem; color: #dee2e6;"></i>
+        </div>
+        <h4>No Past Exams Found</h4>
+        <p class="text-muted">
+            {% if search_query %}
+                No exams match "{{ search_query }}"
+            {% else %}
+                You don't have any past exams yet. Check the available exams to start.
+            {% endif %}
+        </p>
+        <a href="{% url 'exams:exam_list' %}" class="btn btn-primary">
+            <i class="bi bi-pencil-square"></i> View Available Exams
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

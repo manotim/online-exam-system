@@ -224,7 +224,7 @@
                             <a class="nav-link" href="{% url 'exams:exam_list' %}">
                                 <i class="bi bi-journal"></i> Available Exams
                             </a>
-                            <a class="nav-link" href="#">
+                            <a class="nav-link {% if 'past-exams' in request.path %}active{% endif %}" href="{% url 'exams:past_exams' %}">
                                 <i class="bi bi-clock-history"></i> Past Exams
                             </a>
                             <a class="nav-link" href="#">

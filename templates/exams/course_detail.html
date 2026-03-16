@@ -19,6 +19,10 @@
             <p class="text-muted">{{ course.code }}</p>
         </div>
         <div class="col-md-4 text-end">
+            <!-- NEW: View Students Button -->
+            <a href="{% url 'exams:course_students' course.course_id %}" class="btn btn-info me-2">
+                <i class="bi bi-people"></i> View Students ({{ student_count }})
+            </a>
             {% if can_edit %}
             <a href="{% url 'exams:course_edit' course.course_id %}" class="btn btn-warning">
                 <i class="bi bi-pencil"></i> Edit
@@ -145,10 +149,13 @@
                 </div>
             </div>
 
-            <!-- Enrolled Students Card -->
+            <!-- Enrolled Students Card - UPDATED with View All link -->
             <div class="card shadow-sm">
-                <div class="card-header bg-light">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="bi bi-people"></i> Enrolled Students</h5>
+                    <a href="{% url 'exams:course_students' course.course_id %}" class="btn btn-sm btn-outline-primary">
+                        View All
+                    </a>
                 </div>
                 <div class="card-body">
                     {% if enrolled_students %}
@@ -165,8 +172,25 @@
                         And {{ student_count|add:"-5" }} more students...
                     </p>
                     {% endif %}
+                    
+                    <!-- NEW: Quick enroll button for instructors -->
+                    {% if can_edit %}
+                    <div class="mt-3">
+                        <a href="{% url 'exams:enroll_student' course.course_id %}" class="btn btn-sm btn-success w-100">
+                            <i class="bi bi-person-plus"></i> Enroll New Student
+                        </a>
+                    </div>
+                    {% endif %}
+                    
                     {% else %}
                     <p class="text-muted text-center mb-0">No students enrolled yet.</p>
+                    {% if can_edit %}
+                    <div class="mt-3">
+                        <a href="{% url 'exams:enroll_student' course.course_id %}" class="btn btn-sm btn-success w-100">
+                            <i class="bi bi-person-plus"></i> Enroll First Student
+                        </a>
+                    </div>
+                    {% endif %}
                     {% endif %}
                 </div>
             </div>
