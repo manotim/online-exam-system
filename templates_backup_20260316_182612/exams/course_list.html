@@ -1,0 +1,160 @@
+<!-- templates/exams/course_list.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Courses - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header Section -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2 class="mb-0">
+                <i class="bi bi-book"></i> Courses
+            </h2>
+            <p class="text-muted">Manage and view your courses</p>
+        </div>
+        <div class="col-md-4 text-end">
+            {% if can_create %}
+            <a href="{% url 'exams:course_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Create New Course
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Search and Filter Section -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <form method="get" class="d-flex">
+                <div class="input-group">
+                    <span class="input-group-text bg-white">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" 
+                           name="search" 
+                           class="form-control" 
+                           placeholder="Search by title or code..." 
+                           value="{{ search_query }}">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                    {% if search_query %}
+                    <a href="{% url 'exams:course_list' %}" class="btn btn-outline-secondary">Clear</a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+        <div class="col-md-6 text-end">
+            <span class="text-muted">Total Courses: {{ total_courses }}</span>
+        </div>
+    </div>
+
+    <!-- Courses Grid -->
+    {% if courses %}
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        {% for course in courses %}
+        <div class="col">
+            <div class="card h-100 shadow-sm hover-shadow">
+                <div class="card-header bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <span class="badge bg-secondary">{{ course.code }}</span>
+                        </h5>
+                        <small class="text-muted">{{ course.created_at|date:"M d, Y" }}</small>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">{{ course.title }}</h5>
+                    <p class="card-text text-muted">
+                        {{ course.description|truncatewords:20|default:"No description provided." }}
+                    </p>
+                    
+                    <!-- Course Stats -->
+                    <div class="row mt-3 mb-3">
+                        <div class="col-6 text-center">
+                            <div class="border rounded p-2">
+                                <i class="bi bi-people text-primary"></i>
+                                <h6 class="mb-0">{{ course.student_count }}</h6>
+                                <small class="text-muted">Students</small>
+                            </div>
+                        </div>
+                        <div class="col-6 text-center">
+                            <div class="border rounded p-2">
+                                <i class="bi bi-pencil-square text-success"></i>
+                                <h6 class="mb-0">{{ course.exam_count }}</h6>
+                                <small class="text-muted">Exams</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Instructor Info -->
+                    <div class="d-flex align-items-center mb-3">
+                        <i class="bi bi-person-circle me-2"></i>
+                        <div>
+                            <small class="text-muted d-block">Instructor</small>
+                            <strong>{{ course.instructor.get_full_name|default:course.instructor.email }}</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent border-top-0">
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'exams:course_detail' course.course_id %}" 
+                           class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye"></i> View Details
+                        </a>
+                        {% if course.instructor == user or user.role == 'ADMIN' %}
+                        <div class="btn-group">
+                            <a href="{% url 'exams:course_edit' course.course_id %}" 
+                               class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="{% url 'exams:course_delete' course.course_id %}" 
+                               class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <!-- Empty State -->
+    <div class="text-center py-5">
+        <div class="mb-4">
+            <i class="bi bi-book" style="font-size: 5rem; color: #dee2e6;"></i>
+        </div>
+        <h4>No Courses Found</h4>
+        <p class="text-muted">
+            {% if search_query %}
+                No courses matching "{{ search_query }}"
+            {% else %}
+                {% if user.role == 'STUDENT' %}
+                    You are not enrolled in any courses yet.
+                {% elif user.role == 'INSTRUCTOR' %}
+                    You haven't created any courses yet.
+                {% else %}
+                    No courses have been created yet.
+                {% endif %}
+            {% endif %}
+        </p>
+        {% if can_create %}
+        <a href="{% url 'exams:course_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Create Your First Course
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.hover-shadow {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.hover-shadow:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15) !important;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,122 @@
+<!-- templates/exams/course_form.html -->
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if is_edit %}Edit{% else %}Create{% endif %} Course - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-{% if is_edit %}pencil{% else %}plus-circle{% endif %}"></i>
+                        {% if is_edit %}Edit{% else %}Create New{% endif %} Course
+                    </h4>
+                </div>
+                
+                <div class="card-body">
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        
+                        <!-- Display non-field errors -->
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Course Title -->
+                        <div class="mb-3">
+                            <label for="{{ form.title.id_for_label }}" class="form-label">
+                                Course Title <span class="text-danger">*</span>
+                            </label>
+                            {{ form.title }}
+                            {% if form.title.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in form.title.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            <div class="form-text">Enter the full course name</div>
+                        </div>
+                        
+                        <!-- Course Code -->
+                        <div class="mb-3">
+                            <label for="{{ form.code.id_for_label }}" class="form-label">
+                                Course Code <span class="text-danger">*</span>
+                            </label>
+                            {{ form.code }}
+                            {% if form.code.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in form.code.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            <div class="form-text">{{ form.code.help_text }}</div>
+                        </div>
+                        
+                        <!-- Description -->
+                        <div class="mb-3">
+                            <label for="{{ form.description.id_for_label }}" class="form-label">
+                                Description
+                            </label>
+                            {{ form.description }}
+                            {% if form.description.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in form.description.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            <div class="form-text">Provide a detailed description of the course</div>
+                        </div>
+                        
+                        <!-- Institution -->
+                        <div class="mb-3">
+                            <label for="{{ form.institution.id_for_label }}" class="form-label">
+                                Institution
+                            </label>
+                            {{ form.institution }}
+                            {% if form.institution.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in form.institution.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            <div class="form-text">{{ form.institution.help_text }}</div>
+                        </div>
+                        
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{% url 'exams:course_list' %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-{% if is_edit %}check-circle{% else %}save{% endif %}"></i>
+                                {% if is_edit %}Update{% else %}Create{% endif %} Course
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                {% if is_edit %}
+                <div class="card-footer bg-light">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle"></i>
+                        Created: {{ course.created_at|date:"F d, Y" }}
+                    </small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

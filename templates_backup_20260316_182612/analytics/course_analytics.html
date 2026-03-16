@@ -1,0 +1,589 @@
+{% extends 'base.html' %}
+
+{% block title %}Course Analytics - {{ course.title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .course-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 30px;
+        margin-bottom: 30px;
+    }
+    
+    .stat-card {
+        border-radius: 10px;
+        transition: transform 0.2s;
+        height: 100%;
+    }
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    
+    .exam-performance-card {
+        border-left: 4px solid #6c757d;
+        margin-bottom: 15px;
+    }
+    .exam-performance-card:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .student-ranking {
+        border-bottom: 1px solid #dee2e6;
+        padding: 10px 0;
+    }
+    .student-ranking:last-child {
+        border-bottom: none;
+    }
+    
+    .ranking-badge {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: white;
+    }
+    .ranking-1 { background-color: #ffc107; }
+    .ranking-2 { background-color: #6c757d; }
+    .ranking-3 { background-color: #fd7e14; }
+    .ranking-other { background-color: #e9ecef; color: #495057; }
+    
+    .trend-badge {
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+    }
+    .trend-improving { background-color: #d4edda; color: #155724; }
+    .trend-declining { background-color: #f8d7da; color: #721c24; }
+    .trend-stable { background-color: #fff3cd; color: #856404; }
+    
+    .progress-thin {
+        height: 6px;
+        border-radius: 3px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Course Header -->
+    <div class="course-header">
+        <div class="row">
+            <div class="col-md-8">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb" style="background: transparent; color: rgba(255,255,255,0.8);">
+                        <li class="breadcrumb-item"><a href="{% url 'analytics:dashboard' %}" style="color: white;">Analytics</a></li>
+                        <li class="breadcrumb-item"><a href="{% url 'analytics:instructor_dashboard' %}" style="color: white;">Instructor</a></li>
+                        <li class="breadcrumb-item active" style="color: white;">Course Analytics</li>
+                    </ol>
+                </nav>
+                
+                <h1>{{ course.title }}</h1>
+                <p class="lead mb-0">{{ course.code }}</p>
+                {% if course.description %}
+                <p class="mb-0 mt-2">{{ course.description|truncatewords:30 }}</p>
+                {% endif %}
+                
+                <div class="mt-3">
+                    <span class="badge bg-light text-dark me-2">
+                        <i class="bi bi-person"></i> {{ course.instructor.email }}
+                    </span>
+                    <span class="badge bg-light text-dark me-2">
+                        <i class="bi bi-calendar"></i> Created {{ course.created_at|date:"M d, Y" }}
+                    </span>
+                    <span class="badge bg-light text-dark">
+                        <i class="bi bi-building"></i> {{ course.institution.name|default:"No Institution" }}
+                    </span>
+                </div>
+            </div>
+            
+            <div class="col-md-4 text-end">
+                <div class="btn-group mt-3">
+                    <a href="{% url 'analytics:export_report' 'course' course.course_id 'csv' %}" 
+                       class="btn btn-light">
+                        <i class="bi bi-download"></i> Export CSV
+                    </a>
+                    <a href="{% url 'exams:exam_list' %}?course={{ course.course_id }}" 
+                       class="btn btn-outline-light">
+                        <i class="bi bi-journal-text"></i> View Exams
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    {% if performance %}
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card text-white bg-primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Total Students</h6>
+                            <h2 class="mb-0">{{ performance.overview.total_students }}</h2>
+                            <small>{{ performance.overview.total_submissions }} submissions</small>
+                        </div>
+                        <i class="bi bi-people display-6 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card text-white bg-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Average Score</h6>
+                            <h2 class="mb-0">{{ performance.overview.average_score|floatformat:1 }}</h2>
+                            <small>Across all exams</small>
+                        </div>
+                        <i class="bi bi-graph-up display-6 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card text-white bg-info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Participation Rate</h6>
+                            <h2 class="mb-0">{{ performance.overview.participation_rate|floatformat:1 }}%</h2>
+                            <small>Student engagement</small>
+                        </div>
+                        <i class="bi bi-check-circle display-6 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card {% if performance.trend == 'improving' %}bg-warning{% elif performance.trend == 'declining' %}bg-danger{% else %}bg-secondary{% endif %} text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Performance Trend</h6>
+                            <h2 class="mb-0">
+                                {% if performance.trend == 'improving' %}
+                                    <i class="bi bi-arrow-up-right"></i> Improving
+                                {% elif performance.trend == 'declining' %}
+                                    <i class="bi bi-arrow-down-right"></i> Declining
+                                {% else %}
+                                    <i class="bi bi-dash"></i> Stable
+                                {% endif %}
+                            </h2>
+                            <small>Course-wide trend</small>
+                        </div>
+                        <i class="bi bi-trend-up display-6 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="row">
+        <!-- Left Column: Exam Performance -->
+        <div class="col-lg-8">
+            <!-- Exam Performance -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Exam Performance</h5>
+                    <span class="badge bg-primary">{{ performance.exam_performance|length }} exams</span>
+                </div>
+                <div class="card-body">
+                    {% if performance.exam_performance %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Exam</th>
+                                    <th>Date</th>
+                                    <th>Students</th>
+                                    <th>Average Score</th>
+                                    <th>Performance</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for exam_data in performance.exam_performance %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ exam_data.title }}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ exam_data.exam_id|slice:":8" }}...</small>
+                                    </td>
+                                    <td>{{ exam_data.date|date:"M d, Y" }}</td>
+                                    <td>{{ exam_data.total_students }}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="me-2">{{ exam_data.average_score|floatformat:1 }}</div>
+                                            <div style="width: 80px;">
+                                                <div class="progress progress-thin">
+                                                    <div class="progress-bar 
+                                                        {% if exam_data.average_percentage >= 80 %}bg-success
+                                                        {% elif exam_data.average_percentage >= 60 %}bg-info
+                                                        {% elif exam_data.average_percentage >= 40 %}bg-warning
+                                                        {% else %}bg-danger{% endif %}" 
+                                                        style="width: {{ exam_data.average_percentage }}%">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">{{ exam_data.average_percentage|floatformat:1 }}%</small>
+                                    </td>
+                                    <td>
+                                        {% if exam_data.average_percentage >= 80 %}
+                                        <span class="badge bg-success">Excellent</span>
+                                        {% elif exam_data.average_percentage >= 60 %}
+                                        <span class="badge bg-info">Good</span>
+                                        {% elif exam_data.average_percentage >= 40 %}
+                                        <span class="badge bg-warning">Average</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Needs Improvement</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'analytics:exam_analytics' exam_data.exam_id %}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-graph-up"></i> Analytics
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <h6>Exam Performance Insights:</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6>Best Performing Exam</h6>
+                                        {% with best_exam=performance.exam_performance|first %}
+                                        <p class="mb-1">{{ best_exam.title }}</p>
+                                        <small class="text-muted">{{ best_exam.average_percentage|floatformat:1 }}% average</small>
+                                        {% endwith %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6>Most Challenging Exam</h6>
+                                        {% with worst_exam=performance.exam_performance|last %}
+                                        <p class="mb-1">{{ worst_exam.title }}</p>
+                                        <small class="text-muted">{{ worst_exam.average_percentage|floatformat:1 }}% average</small>
+                                        {% endwith %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-journal-x display-4 text-muted"></i>
+                        <h4 class="mt-3">No Exam Data</h4>
+                        <p class="text-muted">No exams have been conducted for this course yet.</p>
+                        <a href="{% url 'exams:create_exam' %}?course={{ course.course_id }}" class="btn btn-primary">
+                            <i class="bi bi-plus-circle"></i> Create First Exam
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Student Enrollment -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Student Enrollment</h5>
+                </div>
+                <div class="card-body">
+                    {% with enrollments=course.enrollments.filter.is_active=True %}
+                    {% if enrollments %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Enrolled</th>
+                                    <th>Status</th>
+                                    <th>Exams Taken</th>
+                                    <th>Avg. Score</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for enrollment in enrollments|slice:":10" %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ enrollment.student.email }}</strong>
+                                        {% if enrollment.student.get_full_name %}
+                                            <br><small>{{ enrollment.student.get_full_name }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ enrollment.enrolled_at|date:"M d, Y" }}</td>
+                                    <td>
+                                        {% if enrollment.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% with submissions=enrollment.student.submissions.filter.exam__course=course %}
+                                        {{ submissions.count }}
+                                        {% endwith %}
+                                    </td>
+                                    <td>
+                                        {% with submissions=enrollment.student.submissions.filter.exam__course=course %}
+                                        {% if submissions %}
+                                            {% with avg=submissions.aggregate.Avg('total_score') %}
+                                            {{ avg.total_score__avg|floatformat:1|default:"-" }}
+                                            {% endwith %}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                        {% endwith %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    {% if enrollments.count > 10 %}
+                    <div class="text-center mt-3">
+                        <a href="#" class="btn btn-outline-primary">
+                            View All {{ enrollments.count }} Students
+                        </a>
+                    </div>
+                    {% endif %}
+                    
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-people display-4 text-muted"></i>
+                        <h4 class="mt-3">No Students Enrolled</h4>
+                        <p class="text-muted">No students have enrolled in this course yet.</p>
+                    </div>
+                    {% endif %}
+                    {% endwith %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Course Insights -->
+        <div class="col-lg-4">
+            <!-- Course Trend Analysis -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Course Trend Analysis</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <span class="trend-badge trend-{{ performance.trend }}">
+                            <i class="bi 
+                                {% if performance.trend == 'improving' %}bi-arrow-up-right
+                                {% elif performance.trend == 'declining' %}bi-arrow-down-right
+                                {% else %}bi-dash{% endif %}"></i>
+                            {{ performance.trend|title }}
+                        </span>
+                    </div>
+                    
+                    <h6>Key Metrics:</h6>
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle text-success"></i>
+                            <strong>Participation:</strong> {{ performance.overview.participation_rate|floatformat:1 }}%
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-graph-up text-info"></i>
+                            <strong>Average Score:</strong> {{ performance.overview.average_score|floatformat:1 }}
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-journal-text text-primary"></i>
+                            <strong>Total Exams:</strong> {{ performance.overview.total_exams }}
+                        </li>
+                        <li>
+                            <i class="bi bi-people text-warning"></i>
+                            <strong>Active Students:</strong> {{ performance.overview.total_students }}
+                        </li>
+                    </ul>
+                    
+                    <div class="mt-4">
+                        <h6>Recommendations:</h6>
+                        {% if performance.overview.average_score < 60 %}
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Action Needed:</strong> Consider reviewing course materials and teaching methods.
+                        </div>
+                        {% elif performance.overview.participation_rate < 50 %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Engagement:</strong> Increase student participation through interactive activities.
+                        </div>
+                        {% else %}
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle"></i>
+                            <strong>Good Progress:</strong> Course is performing well overall.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Students -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Top Performing Students</h5>
+                </div>
+                <div class="card-body">
+                    {% if performance.student_rankings %}
+                    <div class="list-group list-group-flush">
+                        {% for student in performance.student_rankings|slice:":5" %}
+                        <div class="student-ranking">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <div class="ranking-badge ranking-{{ forloop.counter }} me-3">
+                                        {{ student.rank }}
+                                    </div>
+                                    <div>
+                                        <strong>{{ student.name|default:student.email|truncatechars:20 }}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ student.email|truncatechars:25 }}</small>
+                                    </div>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-success">{{ student.average_percentage|floatformat:1 }}%</span>
+                                    <br>
+                                    <small class="text-muted">{{ student.exams_taken }} exams</small>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <div class="progress progress-thin">
+                                    <div class="progress-bar bg-success" 
+                                         style="width: {{ student.average_percentage }}%">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="text-center mt-3">
+                        <a href="#" class="btn btn-sm btn-outline-primary">
+                            View All Rankings
+                        </a>
+                    </div>
+                    
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-trophy text-muted" style="font-size: 3rem;"></i>
+                        <p class="mt-3">No ranking data available</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Course Actions -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Course Management</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'exams:create_exam' %}?course={{ course.course_id }}" 
+                           class="btn btn-primary">
+                            <i class="bi bi-plus-circle"></i> Create New Exam
+                        </a>
+                        
+                        <a href="{% url 'admin:exams_course_change' course.course_id %}" 
+                           class="btn btn-outline-primary">
+                            <i class="bi bi-gear"></i> Edit Course Settings
+                        </a>
+                        
+                        <a href="{% url 'analytics:instructor_dashboard' %}" 
+                           class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to Dashboard
+                        </a>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h6>Quick Stats:</h6>
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="display-6">{{ exams.count }}</div>
+                                <p class="text-muted">Total Exams</p>
+                            </div>
+                            <div class="col-6">
+                                <div class="display-6">
+                                    {% with submissions=course.enrollments.filter.is_active=True %}
+                                    {{ submissions.count }}
+                                    {% endwith %}
+                                </div>
+                                <p class="text-muted">Enrolled</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- No Performance Data -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-graph-up display-4 text-muted"></i>
+                    <h4 class="mt-3">No Analytics Data Available</h4>
+                    <p class="text-muted">This course doesn't have any exam data yet. Create exams and students need to submit them to see analytics.</p>
+                    <div class="mt-4">
+                        <a href="{% url 'exams:create_exam' %}?course={{ course.course_id }}" class="btn btn-primary me-2">
+                            <i class="bi bi-plus-circle"></i> Create First Exam
+                        </a>
+                        <a href="{% url 'analytics:instructor_dashboard' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+
+// Export functionality
+function exportCourseData(format) {
+    const url = "{% url 'analytics:export_report' 'course' course.course_id 'csv' %}".replace('csv', format);
+    window.location.href = url;
+}
+
+// Print report
+function printReport() {
+    window.print();
+}
+</script>
+{% endblock %}

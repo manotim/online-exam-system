@@ -1,4 +1,4 @@
-# apps/exams/views.py - Add these functions
+# apps/exams/views.py 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse, HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
@@ -7,6 +7,11 @@ from django.utils import timezone
 from .utils import can_access_exam, validate_exam_timing, prepare_exam_context, calculate_time_remaining
 from .models import Exam, Question, Submission, Answer, Course
 from apps.grading.services import AutoGradingService
+from django.db.models import Q, Count
+from .models import Course, Enrollment
+from .forms import CourseForm, CourseFilterForm
+from apps.users.models import Institution
+from django.db import models
 
 @login_required
 def exam_list(request):
@@ -291,3 +296,251 @@ def debug_submissions(request):
     output += "</table>"
     
     return HttpResponse(output)
+
+
+
+@login_required
+def course_list(request):
+    """Display list of courses based on user role"""
+    user = request.user
+    
+    # Get search query from request
+    search_query = request.GET.get('search', '')
+    
+    # Base queryset based on user role
+    if user.role == 'ADMIN':
+        # Admins see all courses
+        courses = Course.objects.all()
+    elif user.role == 'INSTRUCTOR':
+        # Instructors see courses they teach
+        courses = Course.objects.filter(instructor=user)
+    else:  # STUDENT
+        # Students see courses they're enrolled in
+        courses = Course.objects.filter(
+            enrollment__student=user,  # Changed from enrollments to enrollment
+            enrollment__is_active=True
+        )
+    
+    # Apply search filter if provided
+    if search_query:
+        courses = courses.filter(
+            Q(title__icontains=search_query) |
+            Q(code__icontains=search_query) |
+            Q(description__icontains=search_query)
+        )
+    
+    # Order by created date
+    courses = courses.order_by('-created_at')
+    
+    # Get counts for each course - FIXED the related_name issue
+    for course in courses:
+        # Use the correct related_name from the Enrollment model
+        # Looking at your error message, the related_name is 'enrollment' (singular)
+        course.student_count = Enrollment.objects.filter(
+            course=course, 
+            is_active=True
+        ).count()
+        course.exam_count = course.exam_set.count()
+    
+    context = {
+        'courses': courses,
+        'search_query': search_query,
+        'total_courses': courses.count(),
+        'can_create': user.role in ['INSTRUCTOR', 'ADMIN'],
+    }
+    
+    return render(request, 'exams/course_list.html', context)
+
+
+
+@login_required
+def course_create(request):
+    """Create a new course"""
+    # Check permissions
+    if request.user.role not in ['INSTRUCTOR', 'ADMIN']:
+        messages.error(request, 'Only instructors and administrators can create courses.')
+        return redirect('exams:course_list')
+    
+    if request.method == 'POST':
+        form = CourseForm(request.POST, user=request.user)
+        if form.is_valid():
+            course = form.save(commit=False)
+            course.instructor = request.user
+            course.save()
+            messages.success(request, f'Course "{course.title}" created successfully!')
+            return redirect('exams:course_detail', course_id=course.course_id)
+        else:
+            # Form errors will be displayed in template
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = CourseForm(user=request.user)
+    
+    # Get institutions for dropdown
+    institutions = Institution.objects.all()
+    
+    context = {
+        'form': form,
+        'institutions': institutions,
+        'is_edit': False,
+    }
+    
+    return render(request, 'exams/course_form.html', context)
+
+
+@login_required
+def course_detail(request, course_id):
+    """Display detailed view of a course"""
+    course = get_object_or_404(Course, course_id=course_id)
+    user = request.user
+    
+    # Check permissions
+    if user.role == 'STUDENT':
+        # Check if student is enrolled - FIXED related_name
+        if not Enrollment.objects.filter(student=user, course=course, is_active=True).exists():
+            messages.error(request, 'You are not enrolled in this course.')
+            return redirect('exams:course_list')
+    elif user.role == 'INSTRUCTOR':
+        # Check if instructor teaches this course
+        if course.instructor != user:
+            messages.error(request, 'You do not have permission to view this course.')
+            return redirect('exams:course_list')
+    # Admins can view all courses
+    
+    # Get exams for this course
+    exams = course.exam_set.filter(is_published=True).order_by('-created_at')
+    
+    # Get enrolled students with their info - FIXED related_name
+    enrollments = Enrollment.objects.filter(
+        course=course, 
+        is_active=True
+    ).select_related('student').order_by('student__email')
+    
+    enrolled_students = [e.student for e in enrollments]
+    
+    # Check if current user is enrolled (for students)
+    is_enrolled = False
+    if user.role == 'STUDENT':
+        is_enrolled = Enrollment.objects.filter(student=user, course=course, is_active=True).exists()
+    
+    # Calculate course statistics
+    total_submissions = 0
+    average_score = None
+    
+    if exams.exists():
+        from apps.exams.models import Submission
+        submissions = Submission.objects.filter(exam__in=exams, submitted_at__isnull=False)
+        total_submissions = submissions.count()
+        
+        if total_submissions > 0:
+            from django.db.models import Avg
+            avg = submissions.filter(is_graded=True).aggregate(avg_score=Avg('total_score'))
+            average_score = avg['avg_score']
+    
+    context = {
+        'course': course,
+        'exams': exams,
+        'enrolled_students': enrolled_students[:10],  # Show first 10
+        'student_count': len(enrolled_students),
+        'exam_count': exams.count(),
+        'total_submissions': total_submissions,
+        'average_score': average_score,
+        'is_enrolled': is_enrolled,
+        'can_edit': user.role in ['ADMIN'] or (user.role == 'INSTRUCTOR' and course.instructor == user),
+        'can_delete': user.role in ['ADMIN'] or (user.role == 'INSTRUCTOR' and course.instructor == user),
+    }
+    
+    return render(request, 'exams/course_detail.html', context)
+
+
+@login_required
+def course_edit(request, course_id):
+    """Edit an existing course"""
+    course = get_object_or_404(Course, course_id=course_id)
+    
+    # Check permissions
+    if request.user.role not in ['ADMIN'] and (request.user.role == 'INSTRUCTOR' and course.instructor != request.user):
+        messages.error(request, 'You do not have permission to edit this course.')
+        return redirect('exams:course_detail', course_id=course_id)
+    
+    if request.method == 'POST':
+        form = CourseForm(request.POST, instance=course, user=request.user)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Course "{course.title}" updated successfully!')
+            return redirect('exams:course_detail', course_id=course.course_id)
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = CourseForm(instance=course, user=request.user)
+    
+    institutions = Institution.objects.all()
+    
+    context = {
+        'form': form,
+        'course': course,
+        'institutions': institutions,
+        'is_edit': True,
+    }
+    
+    return render(request, 'exams/course_form.html', context)
+
+
+@login_required
+def course_delete(request, course_id):
+    """Delete a course"""
+    course = get_object_or_404(Course, course_id=course_id)
+    
+    # Check permissions
+    if request.user.role not in ['ADMIN'] and (request.user.role == 'INSTRUCTOR' and course.instructor != request.user):
+        messages.error(request, 'You do not have permission to delete this course.')
+        return redirect('exams:course_detail', course_id=course_id)
+    
+    # Check if course has exams
+    exam_count = course.exam_set.count()
+    
+    if request.method == 'POST':
+        course_title = course.title
+        course.delete()
+        messages.success(request, f'Course "{course_title}" deleted successfully!')
+        return redirect('exams:course_list')
+    
+    context = {
+        'course': course,
+        'exam_count': exam_count,
+    }
+    
+    return render(request, 'exams/course_confirm_delete.html', context)
+
+
+@login_required
+def submissions_for_exam(request, exam_id):
+    """View all submissions for a specific exam"""
+    exam = get_object_or_404(Exam, exam_id=exam_id)
+    
+    # Check permissions
+    if request.user.role not in ['INSTRUCTOR', 'ADMIN'] and exam.instructor != request.user:
+        messages.error(request, 'You do not have permission to view these submissions.')
+        return redirect('exams:exam_detail', exam_id=exam_id)
+    
+    # Get all submissions for this exam
+    submissions = exam.submissions.filter(
+        submitted_at__isnull=False
+    ).select_related('student').order_by('-submitted_at')
+    
+    # Filter by grading status if requested
+    status_filter = request.GET.get('status', 'all')
+    if status_filter == 'graded':
+        submissions = submissions.filter(is_graded=True)
+    elif status_filter == 'pending':
+        submissions = submissions.filter(is_graded=False)
+    
+    context = {
+        'exam': exam,
+        'submissions': submissions,
+        'total_count': submissions.count(),
+        'graded_count': submissions.filter(is_graded=True).count(),
+        'pending_count': submissions.filter(is_graded=False).count(),
+        'status_filter': status_filter,
+    }
+    
+    return render(request, 'exams/submissions_for_exam.html', context)

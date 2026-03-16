@@ -34,7 +34,8 @@ INSTALLED_APPS = [
     'apps.api',
     'apps.analytics',
     'apps.grading',
-    'apps.proctoring'
+    'apps.proctoring',
+    'django_extensions',
 ]
 
 

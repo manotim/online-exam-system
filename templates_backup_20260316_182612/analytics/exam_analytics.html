@@ -1,0 +1,495 @@
+{% extends 'base.html' %}
+
+{% block title %}Exam Analytics - {{ exam.title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .distribution-bar {
+        height: 20px;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    .grade-A { background-color: #28a745; }
+    .grade-B { background-color: #20c997; }
+    .grade-C { background-color: #ffc107; }
+    .grade-D { background-color: #fd7e14; }
+    .grade-F { background-color: #dc3545; }
+    
+    .question-difficulty {
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+    }
+    .difficulty-easy { background-color: #d4edda; color: #155724; }
+    .difficulty-medium { background-color: #fff3cd; color: #856404; }
+    .difficulty-challenging { background-color: #f8d7da; color: #721c24; }
+    .difficulty-difficult { background-color: #dc3545; color: white; }
+    
+    .stat-box {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+    
+    .hover-details {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .hover-details:hover {
+        background-color: #f8f9fa;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'analytics:dashboard' %}">Analytics</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'analytics:instructor_dashboard' %}">Instructor</a></li>
+                    <li class="breadcrumb-item active">Exam Analytics</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1>Exam Analytics</h1>
+                    <p class="lead mb-0">{{ exam.title }}</p>
+                    <small class="text-muted">
+                        {{ exam.course.title|default:"No Course" }} | 
+                        {{ exam.questions.count }} questions | 
+                        {{ exam.total_points }} total points
+                    </small>
+                </div>
+                <div class="btn-group">
+                    <a href="{% url 'analytics:export_report' 'exam' exam.exam_id 'csv' %}" 
+                       class="btn btn-outline-success">
+                        <i class="bi bi-download"></i> Export CSV
+                    </a>
+                    <a href="{% url 'grading:submissions_list' exam.exam_id %}" 
+                       class="btn btn-outline-primary">
+                        <i class="bi bi-list-check"></i> View Submissions
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    {% if stats.stats_available %}
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-box text-center">
+                <h3 class="text-primary">{{ stats.participation.total_students }}</h3>
+                <p class="text-muted mb-0">Total Students</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-box text-center">
+                <h3 class="text-success">{{ stats.participation.graded_count }}</h3>
+                <p class="text-muted mb-0">Graded</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-box text-center">
+                <h3 class="text-warning">{{ stats.participation.ungraded_count }}</h3>
+                <p class="text-muted mb-0">Pending</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-box text-center">
+                <h3 class="text-info">{{ stats.participation.completion_rate|floatformat:1 }}%</h3>
+                <p class="text-muted mb-0">Completion Rate</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Score Distribution -->
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Score Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Grade Distribution</h6>
+                            {% for grade, data in stats.grade_distribution.items %}
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>Grade {{ grade }}</span>
+                                    <span>{{ data.count }} ({{ data.percentage|floatformat:1 }}%)</span>
+                                </div>
+                                <div class="distribution-bar">
+                                    <div class="grade-{{ grade }}" style="width: {{ data.percentage }}%"></div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Statistics</h6>
+                            <table class="table table-sm">
+                                <tr>
+                                    <td>Average Score:</td>
+                                    <td class="text-end">{{ stats.scores.average_score|floatformat:1 }} ({{ stats.scores.average_percentage|floatformat:1 }}%)</td>
+                                </tr>
+                                <tr>
+                                    <td>Median Score:</td>
+                                    <td class="text-end">{{ stats.scores.median_score|floatformat:1 }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Highest Score:</td>
+                                    <td class="text-end">{{ stats.scores.highest_score|floatformat:1 }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Lowest Score:</td>
+                                    <td class="text-end">{{ stats.scores.lowest_score|floatformat:1 }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Standard Deviation:</td>
+                                    <td class="text-end">{{ stats.scores.std_deviation|floatformat:1 }}</td>
+                                </tr>
+                            </table>
+                            
+                            <div class="mt-4">
+                                <h6>Performance Summary</h6>
+                                {% if stats.scores.average_percentage >= 80 %}
+                                <div class="alert alert-success">
+                                    <i class="bi bi-check-circle"></i>
+                                    Excellent overall performance
+                                </div>
+                                {% elif stats.scores.average_percentage >= 60 %}
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i>
+                                    Good overall performance
+                                </div>
+                                {% elif stats.scores.average_percentage >= 40 %}
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    Average performance, some areas need improvement
+                                </div>
+                                {% else %}
+                                <div class="alert alert-danger">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    Below average performance, significant improvement needed
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Time Statistics -->
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">Time Statistics</h5>
+                </div>
+                <div class="card-body">
+                    {% if stats.time_stats %}
+                    <table class="table table-sm">
+                        <tr>
+                            <td>Average Completion Time:</td>
+                            <td class="text-end">{{ stats.time_stats.average_completion_time|floatformat:1 }} min</td>
+                        </tr>
+                        <tr>
+                            <td>Median Completion Time:</td>
+                            <td class="text-end">{{ stats.time_stats.median_completion_time|floatformat:1 }} min</td>
+                        </tr>
+                        <tr>
+                            <td>Fastest Completion:</td>
+                            <td class="text-end">{{ stats.time_stats.fastest_completion|floatformat:1 }} min</td>
+                        </tr>
+                        <tr>
+                            <td>Slowest Completion:</td>
+                            <td class="text-end">{{ stats.time_stats.slowest_completion|floatformat:1 }} min</td>
+                        </tr>
+                    </table>
+                    
+                    {% if exam.time_limit_minutes %}
+                    <div class="mt-4">
+                        <h6>Time Limit Analysis</h6>
+                        <div class="progress" style="height: 10px;">
+                            {% with avg_time=stats.time_stats.average_completion_time %}
+                            <div class="progress-bar 
+                                {% if avg_time <= exam.time_limit_minutes|multiply:0.5 %}bg-success
+                                {% elif avg_time <= exam.time_limit_minutes|multiply:0.8 %}bg-info
+                                {% elif avg_time <= exam.time_limit_minutes %}bg-warning
+                                {% else %}bg-danger{% endif %}" 
+                                style="width: {% widthratio avg_time exam.time_limit_minutes 100 %}%">
+                            </div>
+                            {% endwith %}
+                        </div>
+                        <div class="d-flex justify-content-between mt-1">
+                            <small>0 min</small>
+                            <small>Avg: {{ stats.time_stats.average_completion_time|floatformat:1 }} min</small>
+                            <small>{{ exam.time_limit_minutes }} min</small>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-clock text-muted" style="font-size: 3rem;"></i>
+                        <p class="mt-3">No time data available</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Question Analysis -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Question Performance Analysis</h5>
+                </div>
+                <div class="card-body">
+                    {% if stats.question_stats %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Q#</th>
+                                    <th>Type</th>
+                                    <th>Points</th>
+                                    <th>Avg Score</th>
+                                    <th>Difficulty</th>
+                                    <th>Response Rate</th>
+                                    <th>Analysis</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for question in stats.question_stats %}
+                                <tr class="hover-details" 
+                                    onclick="window.location='{% url 'admin:exams_question_change' question.question_id %}'">
+                                    <td><strong>{{ question.position }}</strong></td>
+                                    <td>{{ question.type }}</td>
+                                    <td>{{ question.points }}</td>
+                                    <td>
+                                        {{ question.average_score|floatformat:1 }}
+                                        <br>
+                                        <small class="text-muted">
+                                            {% widthratio question.average_score question.points 100 %}%
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <span class="question-difficulty difficulty-{{ question.difficulty|lower }}">
+                                            {{ question.difficulty }}
+                                        </span>
+                                        <br>
+                                        <small class="text-muted">{{ question.difficulty_pct|floatformat:1 }}%</small>
+                                    </td>
+                                    <td>
+                                        <div class="progress" style="height: 6px;">
+                                            <div class="progress-bar 
+                                                {% if question.response_rate >= 90 %}bg-success
+                                                {% elif question.response_rate >= 70 %}bg-info
+                                                {% elif question.response_rate >= 50 %}bg-warning
+                                                {% else %}bg-danger{% endif %}" 
+                                                style="width: {{ question.response_rate }}%">
+                                            </div>
+                                        </div>
+                                        <small>{{ question.response_rate|floatformat:1 }}%</small>
+                                    </td>
+                                    <td>
+                                        {% if question.difficulty_pct >= 80 %}
+                                        <span class="badge bg-success">Well Understood</span>
+                                        {% elif question.difficulty_pct >= 60 %}
+                                        <span class="badge bg-info">Average Understanding</span>
+                                        {% elif question.difficulty_pct >= 40 %}
+                                        <span class="badge bg-warning">Challenging</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Very Difficult</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h6>Key Insights:</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6>Easiest Question</h6>
+                                        {% with easiest=stats.question_stats|first %}
+                                        <p class="mb-1">Q{{ easiest.position }}: {{ easiest.difficulty_pct|floatformat:1 }}%</p>
+                                        <small class="text-muted">{{ easiest.type }}</small>
+                                        {% endwith %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6>Most Challenging</h6>
+                                        {% with hardest=stats.question_stats|last %}
+                                        <p class="mb-1">Q{{ hardest.position }}: {{ hardest.difficulty_pct|floatformat:1 }}%</p>
+                                        <small class="text-muted">{{ hardest.type }}</small>
+                                        {% endwith %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6>Recommendations</h6>
+                                        {% with hardest=stats.question_stats|last %}
+                                        <p class="mb-1">Review Q{{ hardest.position }}</p>
+                                        <small class="text-muted">{{ hardest.type }} question</small>
+                                        {% endwith %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-question-circle text-muted" style="font-size: 4rem;"></i>
+                        <h4 class="mt-3">No Question Data</h4>
+                        <p class="text-muted">No submissions yet for this exam</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Submissions List -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Student Submissions</h5>
+                    <a href="{% url 'grading:submissions_list' exam.exam_id %}" 
+                       class="btn btn-sm btn-outline-primary">
+                        View All Submissions
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if submissions %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Score</th>
+                                    <th>Percentage</th>
+                                    <th>Status</th>
+                                    <th>Submitted</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for submission in submissions|slice:":10" %}
+                                <tr>
+                                    <td>{{ submission.student.email }}</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if submission.total_score >= exam.total_points|multiply:0.8 %}bg-success
+                                            {% elif submission.total_score >= exam.total_points|multiply:0.6 %}bg-info
+                                            {% elif submission.total_score >= exam.total_points|multiply:0.4 %}bg-warning
+                                            {% else %}bg-danger{% endif %}">
+                                            {{ submission.total_score|floatformat:1 }}/{{ exam.total_points }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% widthratio submission.total_score exam.total_points 100 %}%
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if submission.grading_status == 'MANUALLY_GRADED' %}bg-success
+                                            {% elif submission.grading_status == 'AUTO_GRADED' %}bg-info
+                                            {% elif submission.grading_status == 'PARTIALLY_GRADED' %}bg-warning
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ submission.get_grading_status_display }}
+                                        </span>
+                                    </td>
+                                    <td>{{ submission.submitted_at|date:"M d, H:i" }}</td>
+                                    <td>
+                                        <a href="{% url 'grading:grade_submission' submission.submission_id %}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            {% if submission.is_graded %}Review{% else %}Grade{% endif %}
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    {% if submissions.count > 10 %}
+                    <div class="text-center mt-3">
+                        <a href="{% url 'grading:submissions_list' exam.exam_id %}" class="btn btn-outline-primary">
+                            View All {{ submissions.count }} Submissions
+                        </a>
+                    </div>
+                    {% endif %}
+                    
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                        <p class="mt-3">No submissions yet</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% else %}
+    <!-- No Data Available -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-graph-up text-muted" style="font-size: 4rem;"></i>
+                    <h4 class="mt-3">No Analytics Data</h4>
+                    <p class="text-muted">No submissions have been made to this exam yet.</p>
+                    <a href="{% url 'exams:exam_detail' exam.exam_id %}" class="btn btn-primary">
+                        <i class="bi bi-eye"></i> View Exam
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+
+// Print report
+function printReport() {
+    window.print();
+}
+
+// Export data
+function exportData(format) {
+    const url = "{% url 'analytics:export_report' 'exam' exam.exam_id 'csv' %}".replace('csv', format);
+    window.location.href = url;
+}
+</script>
+{% endblock %}

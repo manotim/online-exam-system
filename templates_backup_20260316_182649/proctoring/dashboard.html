@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block title %}Proctoring Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1>Proctoring Dashboard</h1>
+            <p class="text-muted">Monitor exam sessions and suspicious activities</p>
+        </div>
+    </div>
+    
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Active Sessions</h6>
+                    <h2>{{ active_count|default:"0" }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Flagged Sessions</h6>
+                    <h2>{{ flagged_count|default:"0" }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Completed</h6>
+                    <h2>{{ completed_count|default:"0" }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Sessions</h6>
+                    <h2>{{ total_sessions|default:"0" }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sessions Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Exam Sessions</h5>
+            <div class="btn-group float-end">
+                <a href="{% url 'proctoring:session_list' %}" class="btn btn-sm btn-outline-secondary">
+                    View All Sessions
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if sessions %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Exam</th>
+                            <th>Start Time</th>
+                            <th>Status</th>
+                            <th>Tab Switches</th>
+                            <th>Focus Loss</th>
+                            <th>Screenshots</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for session in sessions %}
+                        <tr>
+                            <td>{{ session.student.email }}</td>
+                            <td>{{ session.submission.exam.title }}</td>
+                            <td>{{ session.start_time|date:"M d, H:i" }}</td>
+                            <td>
+                                <span class="badge bg-{% if session.status == 'ACTIVE' %}primary{% elif session.status == 'FLAGGED' %}danger{% else %}success{% endif %}">
+                                    {{ session.get_status_display }}
+                                </span>
+                            </td>
+                            <td>{{ session.tab_switch_count }}</td>
+                            <td>{{ session.focus_loss_count }}</td>
+                            <td>{{ session.screenshot_count }}</td>
+                            <td>
+                                <a href="{% url 'proctoring:session_detail' session.session_id %}" 
+                                   class="btn btn-sm btn-outline-primary">
+                                    Review
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i>
+                No proctoring sessions found. Sessions will appear here when students start exams with proctoring enabled.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Recent Exams -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Exams with Proctoring Enabled</h5>
+                </div>
+                <div class="card-body">
+                    {% if exams %}
+                    <div class="row">
+                        {% for exam in exams %}
+                        <div class="col-md-4 mb-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">{{ exam.title }}</h6>
+                                    <p class="card-text small">
+                                        Course: {{ exam.course.code|default:"N/A" }}<br>
+                                        Time: {{ exam.start_date|date:"M d" }} - {{ exam.end_date|date:"M d" }}<br>
+                                        Submissions: {{ exam.submissions.count }}
+                                    </p>
+                                    <a href="{% url 'exams:exam_detail' exam.exam_id %}" class="btn btn-sm btn-outline-primary">
+                                        View Exam
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        No exams with proctoring enabled. Enable proctoring when creating or editing an exam.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

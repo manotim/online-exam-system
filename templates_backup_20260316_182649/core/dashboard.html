@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1>Dashboard</h1>
+        <p class="text-muted">Welcome back, {{ user.email }} ({{ user.role }})</p>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Statistics Cards -->
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Upcoming Exams</h6>
+                        <h2 class="mb-0">5</h2>
+                    </div>
+                    <i class="bi bi-calendar-event display-6"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Completed Exams</h6>
+                        <h2 class="mb-0">12</h2>
+                    </div>
+                    <i class="bi bi-check-circle display-6"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Pending Grading</h6>
+                        <h2 class="mb-0">3</h2>
+                    </div>
+                    <i class="bi bi-clock-history display-6"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Average Score</h6>
+                        <h2 class="mb-0">85%</h2>
+                    </div>
+                    <i class="bi bi-graph-up display-6"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row mt-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Recent Activity</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">Mathematics Final Exam</h6>
+                            <small class="text-muted">2 hours ago</small>
+                        </div>
+                        <p class="mb-1">Completed with score 92/100</p>
+                    </div>
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">Physics Midterm</h6>
+                            <small class="text-muted">1 day ago</small>
+                        </div>
+                        <p class="mb-1">Exam submitted, grading in progress</p>
+                    </div>
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">Chemistry Quiz</h6>
+                            <small class="text-muted">2 days ago</small>
+                        </div>
+                        <p class="mb-1">Results published: Score 45/50</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Upcoming Exams -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Upcoming Exams</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item">
+                        <h6 class="mb-1">History Final</h6>
+                        <small class="text-muted">Starts: Tomorrow, 10:00 AM</small>
+                        <span class="badge bg-primary">2 hours</span>
+                    </div>
+                    <div class="list-group-item">
+                        <h6 class="mb-1">Biology Lab Exam</h6>
+                        <small class="text-muted">Starts: Dec 25, 2:00 PM</small>
+                        <span class="badge bg-warning">3 days</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

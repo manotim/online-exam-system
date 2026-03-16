@@ -1,0 +1,245 @@
+<!-- templates/grading/flag_submission.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Flag Submission - {{ submission.student.get_full_name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <!-- Breadcrumb navigation -->
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'grading:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'grading:submissions_list' %}">Submissions</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'grading:grade_submission' submission.id %}">{{ submission.exam.title }}</a></li>
+                    <li class="breadcrumb-item active">Flag Submission</li>
+                </ol>
+            </nav>
+
+            <!-- Main card -->
+            <div class="card shadow">
+                <div class="card-header bg-warning text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-flag me-2"></i>
+                        Flag Submission for Review
+                    </h4>
+                </div>
+                
+                <div class="card-body">
+                    <!-- Submission info summary -->
+                    <div class="alert alert-info">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Student:</strong> {{ submission.student.get_full_name|default:submission.student.username }}</p>
+                                <p><strong>Exam:</strong> {{ submission.exam.title }}</p>
+                                <p><strong>Submitted:</strong> {{ submission.submitted_at|date:"F j, Y, g:i a" }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Current Status:</strong> 
+                                    {% if submission.status == 'graded' %}
+                                        <span class="badge bg-success">Graded</span>
+                                    {% elif submission.status == 'pending' %}
+                                        <span class="badge bg-warning">Pending</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ submission.status }}</span>
+                                    {% endif %}
+                                </p>
+                                {% if submission.flagged %}
+                                    <p><strong>Currently Flagged:</strong> 
+                                        <span class="badge bg-danger">Yes</span>
+                                    </p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Flag form -->
+                    <form method="post" id="flagForm">
+                        {% csrf_token %}
+                        
+                        <!-- Flag type selection -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Flag Type <span class="text-danger">*</span></label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="flag_type" id="typeAcademic" value="academic_integrity" required>
+                                <label class="form-check-label" for="typeAcademic">
+                                                    <i class="fas fa-gavel text-danger me-1"></i>
+                                    Academic Integrity Concern
+                                </label>
+                                <div class="form-text">Possible plagiarism, cheating, or unauthorized collaboration</div>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="flag_type" id="typeTechnical" value="technical_issue">
+                                <label class="form-check-label" for="typeTechnical">
+                                    <i class="fas fa-cog text-warning me-1"></i>
+                                    Technical Issue
+                                </label>
+                                <div class="form-text">System error, submission issues, or corrupted files</div>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="flag_type" id="typeGrading" value="grading_discrepancy">
+                                <label class="form-check-label" for="typeGrading">
+                                    <i class="fas fa-balance-scale text-info me-1"></i>
+                                    Grading Discrepancy
+                                </label>
+                                <div class="form-text">Potential grading error or need for regrading</div>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="flag_type" id="typeOther" value="other">
+                                <label class="form-check-label" for="typeOther">
+                                    <i class="fas fa-question-circle text-secondary me-1"></i>
+                                    Other
+                                </label>
+                                <div class="form-text">Other concerns not listed above</div>
+                            </div>
+                        </div>
+
+                        <!-- Reason/Description -->
+                        <div class="mb-4">
+                            <label for="reason" class="form-label fw-bold">Reason for Flagging <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="reason" name="reason" rows="4" 
+                                      placeholder="Please provide detailed reason for flagging this submission..."
+                                      required></textarea>
+                            <div class="form-text">Be specific about the issue to help reviewers understand the concern.</div>
+                        </div>
+
+                        <!-- Severity level -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Severity Level</label>
+                            <select class="form-select" name="severity">
+                                <option value="low">Low - Minor concern, can be reviewed later</option>
+                                <option value="medium" selected>Medium - Should be reviewed soon</option>
+                                <option value="high">High - Urgent, needs immediate attention</option>
+                                <option value="critical">Critical - Blocks grading process</option>
+                            </select>
+                        </div>
+
+                        <!-- Additional actions -->
+                        <div class="mb-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="notify_admin" id="notifyAdmin" checked>
+                                <label class="form-check-label" for="notifyAdmin">
+                                    Notify administrators about this flag
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="hold_grading" id="holdGrading">
+                                <label class="form-check-label" for="holdGrading">
+                                    Hold grading for this submission until review
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="notify_student" id="notifyStudent">
+                                <label class="form-check-label" for="notifyStudent">
+                                    Notify student about this flag (if appropriate)
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Preview of submission (optional) -->
+                        {% if submission.answers or submission.file %}
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Submission Preview</label>
+                            <div class="border rounded p-3 bg-light">
+                                {% if submission.file %}
+                                    <p><strong>Submitted File:</strong> 
+                                        <a href="{{ submission.file.url }}" target="_blank">{{ submission.file.name }}</a>
+                                    </p>
+                                {% endif %}
+                                
+                                {% if submission.answers %}
+                                    <p><strong>Answers Preview:</strong></p>
+                                    <div class="small">
+                                        {{ submission.answers|truncatewords:50 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Action buttons -->
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{% url 'grading:grade_submission' submission.id %}" class="btn btn-secondary">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                            <div>
+                                <button type="submit" name="action" value="flag" class="btn btn-warning me-2">
+                                    <i class="fas fa-flag me-2"></i>Flag Submission
+                                </button>
+                                <button type="submit" name="action" value="flag_and_escalate" class="btn btn-danger">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>Flag & Escalate
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Recent flags info (optional) -->
+            {% if submission.flags.exists %}
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Previous Flags</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for flag in submission.flags.all %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ flag.get_flag_type_display }}</strong>
+                                    <span class="badge bg-{% if flag.severity == 'high' %}danger{% elif flag.severity == 'medium' %}warning{% else %}info{% endif %} ms-2">
+                                        {{ flag.get_severity_display }}
+                                    </span>
+                                </div>
+                                <small class="text-muted">{{ flag.created_at|date:"M d, Y" }}</small>
+                            </div>
+                            <p class="mb-1 mt-2">{{ flag.reason }}</p>
+                            <small class="text-muted">Flagged by: {{ flag.flagged_by.get_full_name|default:flag.flagged_by.username }}</small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript for form enhancements -->
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Character counter for reason field
+    const reasonField = document.getElementById('reason');
+    const charCounter = document.createElement('small');
+    charCounter.className = 'form-text text-muted float-end';
+    reasonField.parentNode.appendChild(charCounter);
+    
+    function updateCharCount() {
+        const count = reasonField.value.length;
+        charCounter.textContent = `${count} characters`;
+        
+        if (count > 500) {
+            charCounter.classList.add('text-warning');
+        } else {
+            charCounter.classList.remove('text-warning');
+        }
+    }
+    
+    reasonField.addEventListener('input', updateCharCount);
+    updateCharCount();
+    
+    // Confirm before flagging
+    const flagForm = document.getElementById('flagForm');
+    flagForm.addEventListener('submit', function(e) {
+        if (!confirm('Are you sure you want to flag this submission? This action will be recorded.')) {
+            e.preventDefault();
+        }
+    });
+});
+</script>
+{% endblock %}
+{% endblock %}

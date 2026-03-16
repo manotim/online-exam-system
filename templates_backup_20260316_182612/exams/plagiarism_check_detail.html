@@ -1,0 +1,233 @@
+{% extends 'base.html' %}
+
+{% block title %}Plagiarism Check Details{% endblock %}
+
+{% block extra_css %}
+<style>
+    .similarity-high { background-color: #f8d7da; }
+    .similarity-medium { background-color: #fff3cd; }
+    .similarity-low { background-color: #d1ecf1; }
+    .matched-text {
+        background-color: #ffeb3b;
+        padding: 2px;
+        border-radius: 3px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'exams:plagiarism_dashboard' %}">Plagiarism Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Check Details</li>
+                </ol>
+            </nav>
+            <h1>Plagiarism Check Details</h1>
+            <p class="text-muted">
+                Checked: {{ check.checked_at|date:"M d, Y H:i" }} | 
+                Status: <span class="badge bg-{% if check.status == 'COMPLETED' %}success{% else %}warning{% endif %}">
+                    {{ check.get_status_display }}
+                </span>
+            </p>
+        </div>
+    </div>
+    
+    <!-- Summary Card -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card {% if check.similarity_score >= 0.8 %}border-danger{% elif check.similarity_score >= 0.5 %}border-warning{% else %}border-success{% endif %}">
+                <div class="card-body text-center">
+                    <h6 class="card-title">Overall Similarity Score</h6>
+                    <h1 class="display-4">{{ check.similarity_score|default:"N/A"|floatformat:2 }}</h1>
+                    <div class="mt-3">
+                        {% if check.similarity_score >= 0.8 %}
+                        <span class="badge bg-danger">High Risk</span>
+                        <p class="text-muted mt-2">Strong evidence of plagiarism detected</p>
+                        {% elif check.similarity_score >= 0.5 %}
+                        <span class="badge bg-warning">Medium Risk</span>
+                        <p class="text-muted mt-2">Moderate similarity found</p>
+                        {% elif check.similarity_score %}
+                        <span class="badge bg-success">Low Risk</span>
+                        <p class="text-muted mt-2">Minimal similarity detected</p>
+                        {% else %}
+                        <span class="badge bg-secondary">Not Checked</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Submission Information</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-3">Student:</dt>
+                        <dd class="col-sm-9">{{ student.email }}</dd>
+                        
+                        <dt class="col-sm-3">Exam:</dt>
+                        <dd class="col-sm-9">{{ exam.title }}</dd>
+                        
+                        <dt class="col-sm-3">Question:</dt>
+                        <dd class="col-sm-9">{{ answer.question.question_text|truncatechars:100 }}</dd>
+                        
+                        <dt class="col-sm-3">Text Length:</dt>
+                        <dd class="col-sm-9">{{ check.report.text_length|default:"0" }} characters</dd>
+                        
+                        <dt class="col-sm-3">Sources Found:</dt>
+                        <dd class="col-sm-9">{{ check.sources_found }}</dd>
+                        
+                        <dt class="col-sm-3">Check Duration:</dt>
+                        <dd class="col-sm-9">
+                            {% if check.completed_at %}
+                                {{ check.completed_at|timeuntil:check.checked_at }}
+                            {% else %}
+                                In progress...
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Original Answer -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Original Answer</h5>
+                </div>
+                <div class="card-body">
+                    <div class="p-3 bg-light rounded">
+                        {{ answer.answer_text|linebreaks }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Plagiarism Sources -->
+    {% if sources %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Detected Similarities ({{ sources|length }})</h5>
+                </div>
+                <div class="card-body">
+                    <div class="accordion" id="sourcesAccordion">
+                        {% for source in sources %}
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="heading{{ forloop.counter }}">
+                                <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}" 
+                                        type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#collapse{{ forloop.counter }}">
+                                    <span class="me-3">
+                                        <span class="badge bg-{% if source.similarity >= 0.8 %}danger{% elif source.similarity >= 0.5 %}warning{% else %}info{% endif %}">
+                                            {{ source.similarity|floatformat:2 }}
+                                        </span>
+                                    </span>
+                                    {{ source.get_source_type_display }}: {{ source.source_name|truncatechars:50 }}
+                                </button>
+                            </h2>
+                            <div id="collapse{{ forloop.counter }}" 
+                                 class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" 
+                                 data-bs-parent="#sourcesAccordion">
+                                <div class="accordion-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6>Source Text</h6>
+                                            <div class="p-3 bg-light rounded mb-3">
+                                                {{ source.source_text|default:"No source text available"|linebreaks }}
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6>Matched Text</h6>
+                                            <div class="p-3 bg-warning bg-opacity-25 rounded">
+                                                {{ source.matched_text|default:"No matched text"|linebreaks }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <small class="text-muted">
+                                            Similarity: {{ source.similarity|floatformat:2 }} | 
+                                            Type: {{ source.get_source_type_display }}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i>
+                No plagiarism sources detected for this answer.
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Actions -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <a href="{% url 'exams:plagiarism_dashboard' %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Back to Dashboard
+                            </a>
+                        </div>
+                        <div>
+                            <button class="btn btn-outline-primary me-2" onclick="rerunCheck()">
+                                <i class="bi bi-arrow-repeat"></i> Re-run Check
+                            </button>
+                            <a href="{% url 'exams:exam_detail' exam.exam_id %}" class="btn btn-primary">
+                                <i class="bi bi-eye"></i> View Exam
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function rerunCheck() {
+    if (!confirm('Re-run plagiarism check for this answer?')) {
+        return;
+    }
+    
+    fetch(`/exams/answer/{{ answer.answer_id }}/check-plagiarism/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Plagiarism check re-run successfully');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    });
+}
+</script>
+{% endblock %}

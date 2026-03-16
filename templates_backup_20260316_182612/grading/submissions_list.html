@@ -1,0 +1,690 @@
+<!-- templates/grading/submissions_list.html -->
+{% extends 'base.html' %}
+
+{% block title %}Submissions List{% endblock %}
+
+{% block extra_css %}
+<style>
+    .status-badge {
+        font-size: 0.8rem;
+        padding: 4px 8px;
+    }
+    .score-progress {
+        width: 80px;
+    }
+    .hover-row:hover {
+        background-color: #f8f9fa;
+    }
+    .filter-card {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+    .stat-box {
+        border-left: 3px solid;
+        padding: 10px;
+        background: white;
+        border-radius: 5px;
+    }
+    .stat-box.pending { border-left-color: #ffc107; }
+    .stat-box.graded { border-left-color: #28a745; }
+    .stat-box.total { border-left-color: #17a2b8; }
+    .submission-row {
+        transition: all 0.2s;
+    }
+    .submission-row:hover {
+        transform: translateX(5px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .submission-row.pending {
+        background-color: #fff3cd;
+    }
+    .submission-row.partial {
+        background-color: #fff3e0;
+    }
+    .submission-row.flagged {
+        background-color: #f8d7da;
+        border-left: 3px solid #dc3545;
+    }
+    .flag-badge {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        margin-left: 5px;
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'grading:dashboard' %}">Grading Dashboard</a></li>
+                    <li class="breadcrumb-item active">Submissions</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1>Submissions</h1>
+                    <p class="lead mb-0">
+                        {% if exam_filter %}
+                            <i class="bi bi-journal-bookmark"></i> {{ exam_filter.title }}
+                            <span class="badge bg-info ms-2">{{ exam_filter.questions.count }} questions</span>
+                            <span class="badge bg-secondary ms-2">{{ exam_filter.total_points }} points</span>
+                        {% else %}
+                            <i class="bi bi-grid"></i> All Exams
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="btn-group">
+                    {% if exam_filter %}
+                        <a href="{% url 'grading:publish_grades' exam_filter.exam_id %}" 
+                           class="btn btn-success"
+                           {% if exam_filter.submissions.filter.is_graded.count == 0 %}disabled{% endif %}>
+                            <i class="bi bi-send"></i> Publish Grades
+                        </a>
+                        <a href="{% url 'grading:bulk_grade' exam_filter.exam_id %}" 
+                           class="btn btn-info">
+                            <i class="bi bi-collection"></i> Bulk Grade
+                        </a>
+                        <a href="{% url 'grading:exam_analytics' exam_filter.exam_id %}" 
+                           class="btn btn-outline-primary">
+                            <i class="bi bi-bar-chart"></i> Analytics
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-box total">
+                <h6>Total Submissions</h6>
+                <h3>{{ total_count }}</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-box pending">
+                <h6>Pending</h6>
+                <h3 class="text-warning">{{ pending_count|default:0 }}</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-box graded">
+                <h6>Graded</h6>
+                <h3 class="text-success">{{ graded_count|default:0 }}</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-box" style="border-left-color: #dc3545;">
+                <h6>Flagged</h6>
+                <h3 class="text-danger">{{ flagged_count|default:0 }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card filter-card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-2">
+                            <label class="form-label"><i class="bi bi-funnel"></i> Status</label>
+                            <select name="filter" class="form-select" onchange="this.form.submit()">
+                                <option value="all" {% if grading_filter == 'all' %}selected{% endif %}>All Submissions</option>
+                                <option value="pending" {% if grading_filter == 'pending' %}selected{% endif %}>Pending</option>
+                                <option value="graded" {% if grading_filter == 'graded' %}selected{% endif %}>Graded</option>
+                                <option value="partial" {% if grading_filter == 'partial' %}selected{% endif %}>Partially Graded</option>
+                                <option value="flagged" {% if grading_filter == 'flagged' %}selected{% endif %}>Flagged</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <label class="form-label"><i class="bi bi-search"></i> Search</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   name="search"
+                                   value="{{ search }}"
+                                   placeholder="Student email...">
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label"><i class="bi bi-calendar"></i> Date From</label>
+                            <input type="date" class="form-control" name="date_from" value="{{ request.GET.date_from }}">
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label"><i class="bi bi-calendar"></i> Date To</label>
+                            <input type="date" class="form-control" name="date_to" value="{{ request.GET.date_to }}">
+                        </div>
+                        
+                        <div class="col-md-3 d-flex align-items-end">
+                            <div class="btn-group w-100">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-funnel"></i> Apply
+                                </button>
+                                <a href="
+                                    {% if exam_filter %}
+                                        {% url 'grading:submissions_list_by_exam' exam_filter.exam_id %}
+                                    {% else %}
+                                        {% url 'grading:submissions_list' %}
+                                    {% endif %}
+                                " class="btn btn-outline-secondary">
+                                    <i class="bi bi-x-circle"></i> Clear
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Submissions Table -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center bg-light">
+            <h5 class="mb-0">
+                <i class="bi bi-list-check"></i> 
+                {{ total_count }} Submission{{ total_count|pluralize }} Found
+                {% if search %} matching "{{ search }}"{% endif %}
+            </h5>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" onclick="window.print()">
+                    <i class="bi bi-printer"></i>
+                </button>
+                <a href="?export=csv{% if exam_filter %}&exam={{ exam_filter.exam_id }}{% endif %}" 
+                   class="btn btn-outline-success">
+                    <i class="bi bi-download"></i> CSV
+                </a>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {% if submissions %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Student</th>
+                                <th>Exam</th>
+                                <th>Submitted</th>
+                                <th>Questions</th>
+                                <th>Score</th>
+                                <th>Status</th>
+                                <th>Time</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for submission in submissions %}
+                            <tr class="submission-row 
+                                {% if submission.grading_status == 'PENDING' %}pending
+                                {% elif submission.grading_status == 'PARTIALLY_GRADED' %}partial
+                                {% endif %}
+                                {% if submission.has_active_flags %}flagged{% endif %}">
+                                <td>
+                                    <strong>{{ submission.student.email|truncatechars:25 }}</strong>
+                                    {% if submission.student.get_full_name %}
+                                        <br><small class="text-muted">{{ submission.student.get_full_name|truncatechars:20 }}</small>
+                                    {% endif %}
+                                    {% if submission.has_active_flags %}
+                                        <span class="badge bg-danger flag-badge" 
+                                              onclick="event.stopPropagation(); viewFlags('{{ submission.submission_id }}')"
+                                              title="View flags">
+                                            <i class="bi bi-flag-fill"></i> Flagged
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {{ submission.exam.title|truncatechars:30 }}
+                                    {% if not exam_filter %}
+                                        <br><small class="text-muted">{{ submission.exam.course.code|default:"No course" }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span title="{{ submission.submitted_at|date:'Y-m-d H:i:s' }}">
+                                        {{ submission.submitted_at|date:"M d, H:i" }}
+                                    </span>
+                                    <br>
+                                    <small class="text-muted">{{ submission.submitted_at|timesince }} ago</small>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="progress score-progress me-2" style="height: 5px;">
+                                            <div class="progress-bar bg-{% if submission.progress == 100 %}success{% else %}warning{% endif %}" 
+                                                 style="width: {{ submission.progress }}%">
+                                            </div>
+                                        </div>
+                                        <small>{{ submission.graded_answers }}/{{ submission.total_answers }}</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if submission.total_score is not None %}
+                                        <div class="d-flex align-items-center">
+                                            <span class="badge 
+                                                {% if submission.total_score >= submission.exam.total_points|floatformat:0|add:'0.8' %}bg-success
+                                                {% elif submission.total_score >= submission.exam.total_points|floatformat:0|add:'0.6' %}bg-info
+                                                {% else %}bg-warning{% endif %} me-2">
+                                                {{ submission.total_score|floatformat:1 }}
+                                            </span>
+                                            <small>/ {{ submission.exam.total_points }}</small>
+                                        </div>
+                                        <small class="text-muted">
+                                            {% widthratio submission.total_score submission.exam.total_points 100 %}%
+                                        </small>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Not graded</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge status-badge
+                                        {% if submission.grading_status == 'MANUALLY_GRADED' %}bg-success
+                                        {% elif submission.grading_status == 'AUTO_GRADED' %}bg-info
+                                        {% elif submission.grading_status == 'PARTIALLY_GRADED' %}bg-warning
+                                        {% else %}bg-secondary{% endif %}">
+                                        {{ submission.get_grading_status_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if submission.submitted_at and submission.started_at %}
+                                        {% with duration=submission.submitted_at|timeuntil:submission.started_at %}
+                                            {% if "minutes" in duration %}
+                                                {{ duration|slice:":2" }}m
+                                            {% elif "hours" in duration %}
+                                                {{ duration|slice:":2" }}h
+                                            {% else %}
+                                                {{ duration|slice:":2" }}s
+                                            {% endif %}
+                                        {% endwith %}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <!-- Main Grade Button -->
+                                        <a href="{% url 'grading:grade_submission' submission.submission_id %}" 
+                                           class="btn btn-{% if submission.is_graded %}outline-success{% else %}warning{% endif %}"
+                                           title="{% if submission.is_graded %}Review{% else %}Grade{% endif %}">
+                                            <i class="bi bi-{% if submission.is_graded %}eye{% else %}pencil{% endif %}"></i>
+                                            {% if submission.is_graded %}Review{% else %}Grade{% endif %}
+                                        </a>
+                                        
+                                        <!-- Simple Grade Button -->
+                                        <a href="{% url 'grading:simple_grade_submission' submission.submission_id %}" 
+                                           class="btn btn-outline-primary"
+                                           title="Quick Grade">
+                                            <i class="bi bi-lightning"></i>
+                                        </a>
+                                        
+                                        <!-- View Feedback Button -->
+                                        <a href="{% url 'grading:view_feedback' submission.submission_id %}" 
+                                           class="btn btn-outline-info"
+                                           title="View Feedback">
+                                            <i class="bi bi-chat-left-text"></i>
+                                        </a>
+                                        
+                                        {% if exam_filter %}
+                                        <a href="{% url 'exams:exam_detail' submission.exam.exam_id %}" 
+                                           class="btn btn-outline-secondary"
+                                           title="View Exam">
+                                            <i class="bi bi-file-text"></i>
+                                        </a>
+                                        {% endif %}
+                                        
+                                        <!-- FIXED: Flag button - use onclick instead of href -->
+                                        <button type="button" 
+                                                class="btn btn-{% if submission.has_active_flags %}danger{% else %}outline-danger{% endif %}"
+                                                onclick="flagSubmission('{{ submission.submission_id }}')"
+                                                title="{% if submission.has_active_flags %}View/Manage Flags{% else %}Flag for Review{% endif %}">
+                                            <i class="bi bi-flag{% if submission.has_active_flags %}-fill{% endif %}"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-inbox display-1 text-muted"></i>
+                    <h4 class="mt-3">No Submissions Found</h4>
+                    <p class="text-muted">
+                        {% if search %}
+                            No submissions matching "{{ search }}"
+                        {% elif grading_filter == 'pending' %}
+                            No pending submissions at the moment. All caught up!
+                        {% elif grading_filter == 'graded' %}
+                            No graded submissions yet.
+                        {% elif grading_filter == 'flagged' %}
+                            No flagged submissions found.
+                        {% else %}
+                            No submissions found for your exams.
+                        {% endif %}
+                    </p>
+                    <a href="{% url 'grading:dashboard' %}" class="btn btn-primary">
+                        <i class="bi bi-speedometer2"></i> Back to Dashboard
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+        
+        <!-- Pagination -->
+        {% if submissions.paginator.num_pages > 1 %}
+        <div class="card-footer">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if submissions.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" 
+                           href="?page={{ submissions.previous_page_number }}{% if grading_filter %}&filter={{ grading_filter }}{% endif %}{% if search %}&search={{ search }}{% endif %}{% if exam_filter %}&exam={{ exam_filter.exam_id }}{% endif %}">
+                            Previous
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for i in submissions.paginator.page_range %}
+                        {% if submissions.number == i %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ i }}</span>
+                        </li>
+                        {% elif i > submissions.number|add:"-3" and i < submissions.number|add:"3" %}
+                        <li class="page-item">
+                            <a class="page-link" 
+                               href="?page={{ i }}{% if grading_filter %}&filter={{ grading_filter }}{% endif %}{% if search %}&search={{ search }}{% endif %}{% if exam_filter %}&exam={{ exam_filter.exam_id }}{% endif %}">
+                                {{ i }}
+                            </a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if submissions.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" 
+                           href="?page={{ submissions.next_page_number }}{% if grading_filter %}&filter={{ grading_filter }}{% endif %}{% if search %}&search={{ search }}{% endif %}{% if exam_filter %}&exam={{ exam_filter.exam_id }}{% endif %}">
+                            Next
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                <div class="text-center text-muted small mt-2">
+                    Page {{ submissions.number }} of {{ submissions.paginator.num_pages }}
+                </div>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Bulk Actions Footer -->
+    {% if submissions %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0"><i class="bi bi-lightning"></i> Bulk Actions</h6>
+                            <small class="text-muted">Select multiple submissions for batch operations</small>
+                        </div>
+                        <div>
+                            {% if exam_filter %}
+                            <a href="{% url 'grading:bulk_grade' exam_filter.exam_id %}" class="btn btn-primary">
+                                <i class="bi bi-grid-3x3"></i> Bulk Grade This Exam
+                            </a>
+                            {% else %}
+                            <a href="{% url 'grading:bulk_overview' %}" class="btn btn-primary">
+                                <i class="bi bi-grid-3x3"></i> Bulk Grading Overview
+                            </a>
+                            {% endif %}
+                            
+                            <a href="{% url 'grading:start_session' %}" class="btn btn-success">
+                                <i class="bi bi-play-circle"></i> New Grading Session
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Flag Submission Modal -->
+<div class="modal fade" id="flagModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Flag Submission</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="" id="flagForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <input type="hidden" name="submission_id" id="flagSubmissionId">
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Flag Type</label>
+                        <select name="flag_type" class="form-select" required>
+                            <option value="">Select flag type...</option>
+                            <option value="academic_integrity">Academic Integrity Concern</option>
+                            <option value="technical_issue">Technical Issue</option>
+                            <option value="grading_discrepancy">Grading Discrepancy</option>
+                            <option value="missing_submission">Missing Submission</option>
+                            <option value="late_submission">Late Submission</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Severity</label>
+                        <select name="severity" class="form-select">
+                            <option value="low">Low - Minor concern</option>
+                            <option value="medium" selected>Medium - Should be reviewed soon</option>
+                            <option value="high">High - Urgent attention needed</option>
+                            <option value="critical">Critical - Blocks grading process</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Reason</label>
+                        <textarea name="reason" class="form-control" rows="3" required 
+                                  placeholder="Please provide detailed reason for flagging..."></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Additional Notes</label>
+                        <textarea name="additional_notes" class="form-control" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="hold_grading" id="holdGrading">
+                            <label class="form-check-label" for="holdGrading">
+                                Hold grading until resolved
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="notify_admin" id="notifyAdmin">
+                            <label class="form-check-label" for="notifyAdmin">
+                                Notify administrators
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" name="next" id="flagNextUrl" value="submissions_list">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="action" value="flag" class="btn btn-warning">
+                        <i class="bi bi-flag"></i> Flag
+                    </button>
+                    <button type="submit" name="action" value="flag_and_escalate" class="btn btn-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Flag & Escalate
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- View Flags Modal -->
+<div class="modal fade" id="viewFlagsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Submission Flags</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="flagsModalContent">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// FIXED: Flag submission function - builds URL dynamically without reverse
+function flagSubmission(submissionId) {
+    document.getElementById('flagSubmissionId').value = submissionId;
+    
+    // Build the URL dynamically
+    const form = document.getElementById('flagForm');
+    form.action = `/grading/submission/${submissionId}/flag/`;
+    
+    // Set the next URL based on current page
+    {% if exam_filter %}
+    document.getElementById('flagNextUrl').value = "{% url 'grading:submissions_list_by_exam' exam_filter.exam_id %}";
+    {% else %}
+    document.getElementById('flagNextUrl').value = "{% url 'grading:submissions_list' %}";
+    {% endif %}
+    
+    new bootstrap.Modal(document.getElementById('flagModal')).show();
+}
+
+// View flags function
+function viewFlags(submissionId) {
+    const modal = new bootstrap.Modal(document.getElementById('viewFlagsModal'));
+    const content = document.getElementById('flagsModalContent');
+    
+    // Show loading
+    content.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+    modal.show();
+    
+    // Fetch flags via AJAX
+    fetch(`/grading/api/submission/${submissionId}/flags/`)
+        .then(response => response.json())
+        .then(data => {
+            let html = '';
+            if (data.flags && data.flags.length > 0) {
+                data.flags.forEach(flag => {
+                    html += `
+                        <div class="card mb-3 ${flag.status === 'active' ? 'border-danger' : 'border-secondary'}">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="badge bg-${flag.severity === 'critical' ? 'danger' : flag.severity === 'high' ? 'warning' : 'info'} me-2">
+                                        ${flag.severity_display}
+                                    </span>
+                                    <span class="badge bg-${flag.status === 'active' ? 'danger' : flag.status === 'in_review' ? 'warning' : 'success'}">
+                                        ${flag.status_display}
+                                    </span>
+                                </div>
+                                <small class="text-muted">${flag.created_at}</small>
+                            </div>
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2 text-muted">${flag.flag_type_display}</h6>
+                                <p class="card-text">${flag.reason}</p>
+                                ${flag.additional_notes ? `<p class="card-text"><small class="text-muted">${flag.additional_notes}</small></p>` : ''}
+                                <p class="card-text"><small class="text-muted">Flagged by: ${flag.flagged_by}</small></p>
+                                <a href="/grading/flag/${flag.flag_id}/" class="btn btn-sm btn-outline-primary">View Details</a>
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                html = '<p class="text-center text-muted">No flags found for this submission.</p>';
+            }
+            content.innerHTML = html;
+        })
+        .catch(error => {
+            content.innerHTML = '<p class="text-center text-danger">Error loading flags.</p>';
+        });
+}
+
+// Auto-refresh for pending submissions
+{% if grading_filter == 'pending' %}
+let refreshInterval = setInterval(() => {
+    if (document.visibilityState === 'visible') {
+        // Only refresh if not in a modal
+        if (!document.querySelector('.modal.show')) {
+            window.location.reload();
+        }
+    }
+}, 30000);
+{% endif %}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl+G: Go to first pending
+    if (e.ctrlKey && e.key === 'g') {
+        e.preventDefault();
+        const firstPending = document.querySelector('.btn-warning');
+        if (firstPending) {
+            firstPending.click();
+        }
+    }
+    
+    // Ctrl+S: Start session
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        window.location.href = "{% url 'grading:start_session' %}";
+    }
+    
+    // Ctrl+B: Bulk grading
+    if (e.ctrlKey && e.key === 'b') {
+        e.preventDefault();
+        {% if exam_filter %}
+        window.location.href = "{% url 'grading:bulk_grade' exam_filter.exam_id %}";
+        {% else %}
+        window.location.href = "{% url 'grading:bulk_overview' %}";
+        {% endif %}
+    }
+    
+    // Ctrl+F: Focus search
+    if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        document.querySelector('input[name="search"]')?.focus();
+    }
+});
+
+// Show keyboard shortcuts
+console.log('Submissions List Shortcuts:');
+console.log('Ctrl+G: Grade first pending submission');
+console.log('Ctrl+S: Start grading session');
+console.log('Ctrl+B: Bulk grading');
+console.log('Ctrl+F: Focus search');
+
+// Table row click handler
+document.querySelectorAll('.submission-row').forEach(row => {
+    row.addEventListener('dblclick', function() {
+        const gradeBtn = this.querySelector('.btn-warning, .btn-outline-success');
+        if (gradeBtn) {
+            window.location.href = gradeBtn.href;
+        }
+    });
+});
+</script>
+{% endblock %}

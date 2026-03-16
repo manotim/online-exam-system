@@ -7,15 +7,25 @@ from . import views_templates
 app_name = 'exams'
 
 urlpatterns = [
+    # Existing Exam URLs
     path('', views.exam_list, name='exam_list'),
     path('create/', views.create_exam, name='create_exam'),
     path('<uuid:exam_id>/', views.exam_detail, name='exam_detail'),
     path('<uuid:exam_id>/take/', views.take_exam, name='take_exam'),
+    
+    # NEW COURSE URLs
+    path('courses/', views.course_list, name='course_list'),
+    path('courses/create/', views.course_create, name='course_create'),
+    path('courses/<uuid:course_id>/', views.course_detail, name='course_detail'),
+    path('courses/<uuid:course_id>/edit/', views.course_edit, name='course_edit'),
+    path('courses/<uuid:course_id>/delete/', views.course_delete, name='course_delete'),
+    
     # Plagiarism URLs
     path('plagiarism/', views_plagiarism.plagiarism_dashboard, name='plagiarism_dashboard'),
     path('plagiarism/check/<uuid:check_id>/', views_plagiarism.plagiarism_check_detail, name='plagiarism_check_detail'),
     path('answer/<uuid:answer_id>/check-plagiarism/', views_plagiarism.run_plagiarism_check, name='run_plagiarism_check'),
     path('exam/<uuid:exam_id>/bulk-plagiarism-check/', views_plagiarism.bulk_plagiarism_check, name='bulk_plagiarism_check'),
+    path('submissions/exam/<uuid:exam_id>/', views.submissions_for_exam, name='submissions_list_exam'),
 
     # Template URLs
     path('templates/', views_templates.template_list, name='template_list'),
@@ -26,6 +36,7 @@ urlpatterns = [
     path('templates/<uuid:template_id>/create-exam/', views_templates.template_create_exam, name='template_create_exam'),
     path('templates/<uuid:template_id>/add-question/', views_templates.template_add_question, name='template_add_question'),
     path('templates/question/<uuid:question_id>/delete/', views_templates.template_delete_question, name='template_delete_question'),
-    # apps/exams/urls.py - add this line
+    
+    # Debug URL
     path('debug-submissions/', views.debug_submissions, name='debug_submissions'),
 ]

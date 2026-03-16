@@ -1,0 +1,199 @@
+<!-- templates/grading/rubric_detail.html -->
+{% extends 'base.html' %}
+
+{% block title %}{{ rubric.name }} - Rubric Details{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1>{{ rubric.name }}</h1>
+            <p class="text-muted">
+                <span class="badge bg-{% if rubric.is_active %}success{% else %}secondary{% endif %}">
+                    {{ rubric.get_rubric_type_display }}
+                </span>
+                {% if rubric.is_public %}
+                <span class="badge bg-info">Public</span>
+                {% endif %}
+                <span class="ms-2">
+                    Max Score: <strong>{{ rubric.max_score }}</strong>
+                </span>
+            </p>
+        </div>
+        <div>
+            <a href="{% url 'grading:rubric_list' %}" class="btn btn-outline-secondary">
+                Back to Rubrics
+            </a>
+            {% if rubric.instructor == request.user %}
+            <a href="?edit=true" class="btn btn-primary">
+                Edit Rubric
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Description -->
+    {% if rubric.description %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5>Description</h5>
+            <p class="mb-0">{{ rubric.description|linebreaks }}</p>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Criteria Table -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Grading Criteria</h5>
+        </div>
+        <div class="card-body">
+            {% if criteria %}
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 30%;">Criterion</th>
+                            <th>Description</th>
+                            <th class="text-center" style="width: 100px;">Max Score</th>
+                            <th class="text-center" style="width: 100px;">Weight</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for criterion in criteria %}
+                        <tr>
+                            <td><strong>{{ criterion.title }}</strong></td>
+                            <td>{{ criterion.description|default:"-"|linebreaks }}</td>
+                            <td class="text-center">{{ criterion.max_score }}</td>
+                            <td class="text-center">{{ criterion.weight }}</td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-light">
+                            <td colspan="2" class="text-end"><strong>Total Weight:</strong></td>
+                            <td colspan="2" class="text-center">
+                                <strong>{{ criteria|sum_weights }}</strong>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                <h5 class="mt-3">No Criteria Defined</h5>
+                <p class="text-muted">This rubric doesn't have any grading criteria yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Usage Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h2 class="text-primary">{{ rubric.question_set.count }}</h2>
+                    <p class="text-muted">Questions Using This Rubric</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h2 class="text-success">{{ rubric.max_score }}</h2>
+                    <p class="text-muted">Maximum Possible Score</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h2 class="text-info">{{ criteria.count }}</h2>
+                    <p class="text-muted">Grading Criteria</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Associated Questions -->
+    {% with questions=rubric.question_set.all %}
+    {% if questions %}
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Questions Using This Rubric</h5>
+        </div>
+        <div class="card-body">
+            <div class="list-group">
+                {% for question in questions %}
+                <a href="{% url 'exams:exam_detail' question.exam.exam_id %}" 
+                   class="list-group-item list-group-item-action">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">{{ question.exam.title }}</h6>
+                            <small class="text-muted">
+                                Question {{ question.position }}: {{ question.question_text|truncatewords:10 }}
+                            </small>
+                        </div>
+                        <div>
+                            <span class="badge bg-secondary">{{ question.points }} points</span>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endwith %}
+    
+    <!-- Edit Mode (if requested) -->
+    {% if request.GET.edit and rubric.instructor == request.user %}
+    <div class="card mt-4">
+        <div class="card-header bg-warning">
+            <h5 class="mb-0 text-white">Edit Rubric</h5>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{% url 'grading:edit_rubric' rubric.rubric_id %}">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label for="name" class="form-label">Rubric Name</label>
+                    <input type="text" class="form-control" id="name" name="name" value="{{ rubric.name }}" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea class="form-control" id="description" name="description" rows="3">{{ rubric.description }}</textarea>
+                </div>
+                
+                {% if criteria %}
+                <h6>Edit Criteria:</h6>
+                {% for criterion in criteria %}
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" name="criterion_title_{{ criterion.criterion_id }}" 
+                               value="{{ criterion.title }}" required>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="number" class="form-control" name="criterion_max_score_{{ criterion.criterion_id }}"
+                               value="{{ criterion.max_score }}" min="1" required>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="number" class="form-control" name="criterion_weight_{{ criterion.criterion_id }}"
+                               value="{{ criterion.weight }}" step="0.1" min="0.1">
+                    </div>
+                </div>
+                {% endfor %}
+                {% endif %}
+                
+                <div class="d-flex justify-content-end mt-4">
+                    <a href="?" class="btn btn-outline-secondary me-2">Cancel</a>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

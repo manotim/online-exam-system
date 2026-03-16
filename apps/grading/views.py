@@ -133,106 +133,30 @@ def submissions_list(request, exam_id=None):
         messages.error(request, 'Only instructors can access submissions.')
         return redirect('core:dashboard')
     
-    # Get pagination parameters
-    page = request.GET.get('page', 1)
-    page_size = request.GET.get('page_size', 20)  # Default 20 items per page
-    
     if exam_id:
         exam = get_object_or_404(Exam, exam_id=exam_id, instructor=request.user)
-        submissions = exam.submissions.filter(
-            submitted_at__isnull=False
-        ).select_related('student').order_by('-submitted_at')
+        submissions = exam.submissions.filter(submitted_at__isnull=False).order_by('-submitted_at')
         exam_filter = exam
     else:
         exams = Exam.objects.filter(instructor=request.user, is_published=True)
         submissions = Submission.objects.filter(
             exam__in=exams,
             submitted_at__isnull=False
-        ).select_related('student', 'exam').order_by('-submitted_at')
+        ).order_by('-submitted_at')
         exam_filter = None
     
-    # Calculate counts before any filtering
-    total_submissions_count = submissions.count()
-    
-    # Calculate pending and graded counts
-    pending_count = submissions.filter(is_graded=False).count()
-    graded_count = submissions.filter(is_graded=True).count()
-    
-    # Calculate flagged count
-    if exam_filter:
-        flagged_count = SubmissionFlag.objects.filter(
-            exam=exam_filter,
-            status__in=['active', 'in_review']
-        ).values('submission_id').distinct().count()
-    else:
-        exams = Exam.objects.filter(instructor=request.user, is_published=True)
-        flagged_count = SubmissionFlag.objects.filter(
-            exam__in=exams,
-            status__in=['active', 'in_review']
-        ).values('submission_id').distinct().count()
-    
-    # Annotate submissions with additional info
-    for submission in submissions:
-        total_answers = submission.answers.count()
-        graded_answers = submission.answers.filter(points_awarded__isnull=False).count()
-        submission.total_answers = total_answers
-        submission.graded_answers = graded_answers
-        submission.progress = int((graded_answers / total_answers) * 100) if total_answers > 0 else 0
-        
-        # Check if submission has active flags
-        submission.has_active_flags = SubmissionFlag.objects.filter(
-            submission_id=submission.submission_id,
-            status__in=['active', 'in_review']
-        ).exists()
-    
-    # Apply filters
+    # Filter by grading status
     grading_filter = request.GET.get('filter', 'all')
-    filtered_submissions = submissions
-    
     if grading_filter == 'pending':
-        filtered_submissions = [s for s in submissions if not s.is_graded]
+        submissions = submissions.filter(is_graded=False)
     elif grading_filter == 'graded':
-        filtered_submissions = [s for s in submissions if s.is_graded]
-    elif grading_filter == 'partial':
-        filtered_submissions = [s for s in submissions if s.grading_status == 'PARTIALLY_GRADED']
-    elif grading_filter == 'flagged':
-        filtered_submissions = [s for s in submissions if s.has_active_flags]
-    
-    # Search by student email
-    search = request.GET.get('search', '')
-    if search:
-        filtered_submissions = [s for s in filtered_submissions if search.lower() in s.student.email.lower()]
-    
-    # Apply date filters if provided
-    date_from = request.GET.get('date_from')
-    date_to = request.GET.get('date_to')
-    
-    if date_from:
-        filtered_submissions = [s for s in filtered_submissions if s.submitted_at.date() >= datetime.strptime(date_from, '%Y-%m-%d').date()]
-    if date_to:
-        filtered_submissions = [s for s in filtered_submissions if s.submitted_at.date() <= datetime.strptime(date_to, '%Y-%m-%d').date()]
-    
-    # Pagination
-    from django.core.paginator import Paginator
-    paginator = Paginator(filtered_submissions, page_size)
-    
-    try:
-        paginated_submissions = paginator.page(page)
-    except:
-        paginated_submissions = paginator.page(1)
+        submissions = submissions.filter(is_graded=True)
     
     context = {
-        'submissions': paginated_submissions,
+        'submissions': submissions,
         'exam_filter': exam_filter,
         'grading_filter': grading_filter,
-        'search': search,
-        'total_count': len(filtered_submissions),
-        'total_submissions_count': total_submissions_count,
-        'pending_count': pending_count,
-        'graded_count': graded_count,
-        'flagged_count': flagged_count,
-        'page': paginated_submissions,
-        'page_size': page_size,
+        'total_count': submissions.count(),
     }
     
     return render(request, 'grading/submissions_list.html', context)

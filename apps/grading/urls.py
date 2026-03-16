@@ -9,6 +9,8 @@ urlpatterns = [
     path('', views.grading_dashboard, name='dashboard'),
     path('submissions/', views.submissions_list, name='submissions_list'),
     path('submissions/<uuid:exam_id>/', views.submissions_list, name='submissions_list_by_exam'),
+    # Add this line for backward compatibility
+    path('submissions/<uuid:exam_id>/', views.submissions_list, name='submissions_list_exam'),  # ADD THIS
     
     # Grading views
     path('submission/<uuid:submission_id>/', views.grade_submission, name='grade_submission'),

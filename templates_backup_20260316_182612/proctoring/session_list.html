@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block title %}Proctoring Sessions{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'proctoring:dashboard' %}">Proctoring Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">All Sessions</li>
+                </ol>
+            </nav>
+            <h1>All Proctoring Sessions</h1>
+            <p class="text-muted">View all recorded proctoring sessions</p>
+        </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-4">
+                            <label for="status" class="form-label">Status</label>
+                            <select class="form-select" id="status" name="status">
+                                <option value="">All Statuses</option>
+                                <option value="ACTIVE">Active</option>
+                                <option value="FLAGGED">Flagged</option>
+                                <option value="COMPLETED">Completed</option>
+                                <option value="REVIEWED">Reviewed</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="student" class="form-label">Student Email</label>
+                            <input type="text" class="form-control" id="student" name="student" placeholder="Search by student email">
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary me-2">Filter</button>
+                            <a href="{% url 'proctoring:session_list' %}" class="btn btn-outline-secondary">Clear</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sessions Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Sessions ({{ sessions|length }})</h5>
+        </div>
+        <div class="card-body">
+            {% if sessions %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Exam</th>
+                            <th>Start Time</th>
+                            <th>End Time</th>
+                            <th>Status</th>
+                            <th>Suspicious Activities</th>
+                            <th>Screenshots</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for session in sessions %}
+                        <tr>
+                            <td>{{ session.student.email }}</td>
+                            <td>{{ session.submission.exam.title }}</td>
+                            <td>{{ session.start_time|date:"M d, H:i:s" }}</td>
+                            <td>{{ session.end_time|date:"M d, H:i:s"|default:"-" }}</td>
+                            <td>
+                                <span class="badge bg-{% if session.status == 'ACTIVE' %}primary{% elif session.status == 'FLAGGED' %}danger{% else %}success{% endif %}">
+                                    {{ session.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                {{ session.tab_switch_count|add:session.focus_loss_count|add:session.copy_paste_attempts|add:session.right_click_attempts }}
+                            </td>
+                            <td>{{ session.screenshot_count }}</td>
+                            <td>
+                                <a href="{% url 'proctoring:session_detail' session.session_id %}" 
+                                   class="btn btn-sm btn-outline-primary">
+                                    Details
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i>
+                No proctoring sessions found.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

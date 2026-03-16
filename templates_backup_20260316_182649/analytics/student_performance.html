@@ -1,0 +1,416 @@
+{% extends 'base.html' %}
+
+{% block title %}Student Performance - {{ student.email }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .performance-card {
+        border-radius: 10px;
+        border-left: 5px solid #6c757d;
+    }
+    .performance-card.excellent { border-left-color: #28a745; }
+    .performance-card.good { border-left-color: #20c997; }
+    .performance-card.average { border-left-color: #ffc107; }
+    .performance-card.poor { border-left-color: #dc3545; }
+    
+    .strength-badge { background-color: #d1ecf1; color: #0c5460; }
+    .weakness-badge { background-color: #f8d7da; color: #721c24; }
+    
+    .chart-container {
+        height: 300px;
+        position: relative;
+    }
+    
+    .trend-indicator {
+        font-size: 1.5rem;
+        font-weight: bold;
+    }
+    
+    .exam-history-item {
+        border-bottom: 1px solid #dee2e6;
+        padding: 15px 0;
+    }
+    
+    .exam-history-item:last-child {
+        border-bottom: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'analytics:dashboard' %}">Analytics</a></li>
+                    <li class="breadcrumb-item active">Student Performance</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1>Student Performance</h1>
+                    <p class="lead mb-0">
+                        <i class="bi bi-person-circle"></i> {{ student.email }}
+                        {% if student.get_full_name %}
+                            ({{ student.get_full_name }})
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="btn-group">
+                    <a href="{% url 'analytics:export_report' 'student' student.id 'csv' %}" 
+                       class="btn btn-outline-success">
+                        <i class="bi bi-download"></i> Export CSV
+                    </a>
+                    <a href="{% url 'analytics:export_report' 'student' student.id 'json' %}" 
+                       class="btn btn-outline-info">
+                        <i class="bi bi-download"></i> Export JSON
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Course Filter -->
+    {% if enrolled_courses %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-4">
+                            <select name="course_id" class="form-select" onchange="this.form.submit()">
+                                <option value="">All Courses</option>
+                                {% for course in enrolled_courses %}
+                                <option value="{{ course.course_id }}" 
+                                        {% if selected_course and selected_course.course_id == course.course_id %}selected{% endif %}>
+                                    {{ course.title }} ({{ course.code }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <select name="time_period" class="form-select" onchange="this.form.submit()">
+                                <option value="30" {% if request.GET.time_period == '30' %}selected{% endif %}>Last 30 days</option>
+                                <option value="90" {% if request.GET.time_period == '90' or not request.GET.time_period %}selected{% endif %}>Last 90 days</option>
+                                <option value="180" {% if request.GET.time_period == '180' %}selected{% endif %}>Last 6 months</option>
+                                <option value="365" {% if request.GET.time_period == '365' %}selected{% endif %}>Last year</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-filter"></i> Apply Filters
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Performance Summary -->
+    {% if performance %}
+    <div class="row mb-4">
+        <!-- Overall Stats -->
+        <div class="col-md-4">
+            <div class="card performance-card 
+                {% if performance.summary.average_percentage >= 80 %}excellent
+                {% elif performance.summary.average_percentage >= 60 %}good
+                {% elif performance.summary.average_percentage >= 40 %}average
+                {% else %}poor{% endif %}">
+                <div class="card-body text-center">
+                    <h2 class="display-4">{{ performance.summary.average_percentage|floatformat:1 }}%</h2>
+                    <p class="text-muted">Average Score</p>
+                    <div class="d-flex justify-content-around mt-3">
+                        <div>
+                            <h5>{{ performance.summary.total_exams }}</h5>
+                            <small>Exams Taken</small>
+                        </div>
+                        <div>
+                            <h5>{{ performance.summary.highest_score|floatformat:1 }}</h5>
+                            <small>Highest Score</small>
+                        </div>
+                        <div>
+                            <h5>{{ performance.summary.std_deviation|floatformat:1 }}</h5>
+                            <small>Std Dev</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Trend Analysis -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Performance Trend</h5>
+                    {% if performance.trend == 'improving' %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-arrow-up-right trend-indicator text-success" style="font-size: 4rem;"></i>
+                        <h4 class="mt-3">Improving</h4>
+                        <p class="text-muted">Scores are trending upward</p>
+                    </div>
+                    {% elif performance.trend == 'declining' %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-arrow-down-right trend-indicator text-danger" style="font-size: 4rem;"></i>
+                        <h4 class="mt-3">Declining</h4>
+                        <p class="text-muted">Scores are trending downward</p>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-dash trend-indicator text-muted" style="font-size: 4rem;"></i>
+                        <h4 class="mt-3">Stable</h4>
+                        <p class="text-muted">Scores remain consistent</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Strengths & Weaknesses -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Strengths & Weaknesses</h5>
+                    <div class="mb-3">
+                        <h6>Strengths:</h6>
+                        {% if performance.strengths_weaknesses.strengths %}
+                        {% for strength in performance.strengths_weaknesses.strengths %}
+                        <span class="badge strength-badge me-1 mb-1">
+                            {{ strength.type }} ({{ strength.percentage|floatformat:1 }}%)
+                        </span>
+                        {% endfor %}
+                        {% else %}
+                        <p class="text-muted">No significant strengths identified</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <h6>Areas for Improvement:</h6>
+                        {% if performance.strengths_weaknesses.weaknesses %}
+                        {% for weakness in performance.strengths_weaknesses.weaknesses %}
+                        <span class="badge weakness-badge me-1 mb-1">
+                            {{ weakness.type }} ({{ weakness.percentage|floatformat:1 }}%)
+                        </span>
+                        {% endfor %}
+                        {% else %}
+                        <p class="text-muted">No significant weaknesses identified</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exam History -->
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Exam History</h5>
+                </div>
+                <div class="card-body">
+                    {% if performance.exams %}
+                    <div class="list-group list-group-flush">
+                        {% for exam in performance.exams %}
+                        <div class="exam-history-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">{{ exam.title }}</h6>
+                                    <div class="d-flex">
+                                        <small class="text-muted me-3">
+                                            {{ exam.course|default:"No Course" }}
+                                        </small>
+                                        <small class="text-muted">
+                                            {{ exam.submitted_at|date:"M d, Y" }}
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="text-end ms-3">
+                                    <h5 class="mb-0 
+                                        {% if exam.percentage >= 80 %}text-success
+                                        {% elif exam.percentage >= 60 %}text-info
+                                        {% elif exam.percentage >= 40 %}text-warning
+                                        {% else %}text-danger{% endif %}">
+                                        {{ exam.score|floatformat:1 }}/{{ exam.total_points }}
+                                    </h5>
+                                    <small>{{ exam.percentage|floatformat:1 }}%</small>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar 
+                                        {% if exam.percentage >= 80 %}bg-success
+                                        {% elif exam.percentage >= 60 %}bg-info
+                                        {% elif exam.percentage >= 40 %}bg-warning
+                                        {% else %}bg-danger{% endif %}" 
+                                        style="width: {{ exam.percentage }}%">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <a href="{% url 'grading:view_feedback' exam.submission_id %}" 
+                                   class="btn btn-sm btn-outline-info">
+                                    <i class="bi bi-chat-left-text"></i> View Feedback
+                                </a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-file-text text-muted" style="font-size: 4rem;"></i>
+                        <h4 class="mt-3">No Exam History</h4>
+                        <p class="text-muted">No exams taken yet</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Question Type Analysis -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Question Type Performance</h5>
+                </div>
+                <div class="card-body">
+                    {% if performance.strengths_weaknesses.by_question_type %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Question Type</th>
+                                    <th class="text-end">Avg. Score</th>
+                                    <th class="text-end">%</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for q_type, data in performance.strengths_weaknesses.by_question_type.items %}
+                                <tr>
+                                    <td>{{ q_type|title }}</td>
+                                    <td class="text-end">{{ data.average_score|floatformat:1 }}</td>
+                                    <td class="text-end">
+                                        <span class="badge 
+                                            {% if data.percentage >= 80 %}bg-success
+                                            {% elif data.percentage >= 60 %}bg-info
+                                            {% elif data.percentage >= 40 %}bg-warning
+                                            {% else %}bg-danger{% endif %}">
+                                            {{ data.percentage|floatformat:1 }}%
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-pie-chart text-muted" style="font-size: 3rem;"></i>
+                        <p class="mt-3">No question type data</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Recommendations -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Recommendations</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        {% if performance.strengths_weaknesses.weaknesses %}
+                        <li class="mb-2">
+                            <i class="bi bi-lightbulb text-warning"></i>
+                            Focus on improving {{ performance.strengths_weaknesses.weaknesses.0.type }} questions
+                        </li>
+                        {% endif %}
+                        
+                        {% if performance.summary.average_percentage < 70 %}
+                        <li class="mb-2">
+                            <i class="bi bi-lightbulb text-info"></i>
+                            Consider additional practice with past exams
+                        </li>
+                        {% endif %}
+                        
+                        {% if performance.trend == 'declining' %}
+                        <li class="mb-2">
+                            <i class="bi bi-lightbulb text-danger"></i>
+                            Seek assistance from instructor
+                        </li>
+                        {% endif %}
+                        
+                        <li class="mb-2">
+                            <i class="bi bi-lightbulb text-success"></i>
+                            Review feedback on previous exams
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% else %}
+    <!-- No Data Available -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-graph-up text-muted" style="font-size: 4rem;"></i>
+                    <h4 class="mt-3">No Performance Data</h4>
+                    <p class="text-muted">
+                        {% if request.user.role == 'STUDENT' %}
+                            Take some exams to see your performance analytics.
+                        {% else %}
+                            This student hasn't taken any graded exams yet.
+                        {% endif %}
+                    </p>
+                    {% if request.user.role == 'STUDENT' %}
+                    <a href="{% url 'exams:exam_list' %}" class="btn btn-primary">
+                        <i class="bi bi-arrow-right"></i> Browse Available Exams
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Initialize charts (if using Chart.js)
+function initializeCharts() {
+    // Performance trend chart would go here
+    // Example using Chart.js:
+    /*
+    const ctx = document.getElementById('performanceChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
+            datasets: [{
+                label: 'Performance',
+                data: [65, 70, 75, 72, 78],
+                borderColor: '#007bff',
+                tension: 0.1
+            }]
+        }
+    });
+    */
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeCharts();
+    
+    // Print report
+    document.getElementById('printReport').addEventListener('click', function() {
+        window.print();
+    });
+});
+</script>
+{% endblock %}

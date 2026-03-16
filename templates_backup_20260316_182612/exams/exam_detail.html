@@ -1,0 +1,252 @@
+<!-- templates/exams/exam_detail.html -->
+{% extends 'base.html' %}
+
+{% block title %}{{ exam.title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'exams:exam_list' %}">Exams</a></li>
+                    <li class="breadcrumb-item active">{{ exam.title }}</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center">
+                <h1>{{ exam.title }}</h1>
+                <div>
+                    {% if user.role == 'INSTRUCTOR' or user.role == 'ADMIN' %}
+                        <a href="{% url 'grading:submissions_list' exam.exam_id %}" class="btn btn-primary">
+                            <i class="bi bi-list-check"></i> View All Submissions
+                        </a>
+                        <a href="{% url 'grading:bulk_grade' exam.exam_id %}" class="btn btn-info">
+                            <i class="bi bi-grid-3x3"></i> Bulk Grade
+                        </a>
+                        <a href="{% url 'grading:exam_analytics' exam.exam_id %}" class="btn btn-outline-primary">
+                            <i class="bi bi-bar-chart"></i> Analytics
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exam Info -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Exam Details</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Description:</strong> {{ exam.description|default:"No description" }}</p>
+                    <p><strong>Total Points:</strong> {{ exam.total_points }}</p>
+                    <p><strong>Questions:</strong> {{ exam.questions.count }}</p>
+                    {% if exam.course %}
+                        <p><strong>Course:</strong> {{ exam.course.code }} - {{ exam.course.title }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Schedule</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Starts:</strong> {{ exam.start_date|date:"M d, Y H:i" }}</p>
+                    <p><strong>Ends:</strong> {{ exam.end_date|date:"M d, Y H:i" }}</p>
+                    <p><strong>Status:</strong> 
+                        {% if now < exam.start_date %}
+                            <span class="badge bg-warning">Upcoming</span>
+                        {% elif now > exam.end_date %}
+                            <span class="badge bg-secondary">Ended</span>
+                        {% else %}
+                            <span class="badge bg-success">Active</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Submissions Section (for instructors) -->
+    {% if user.role == 'INSTRUCTOR' or user.role == 'ADMIN' %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Submissions ({{ total_submissions }})</h5>
+                    <div>
+                        <span class="badge bg-success me-2">Graded: {{ graded_submissions }}</span>
+                        <span class="badge bg-warning">Pending: {{ total_submissions|add:graded_submissions }}</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if submissions %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Student</th>
+                                        <th>Status</th>
+                                        <th>Score</th>
+                                        <th>Submitted At</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for submission in submissions %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ submission.student.email }}</strong>
+                                            {% if submission.student.get_full_name %}
+                                                <br><small>{{ submission.student.get_full_name }}</small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if submission.submitted_at %}
+                                                <span class="badge bg-success">Submitted</span>
+                                                {% if submission.is_graded %}
+                                                    <span class="badge bg-info">Graded</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-warning">In Progress</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if submission.total_score %}
+                                                <strong>{{ submission.total_score }}/{{ exam.total_points }}</strong>
+                                                <br>
+                                                <small class="text-muted">
+                                                    {% widthratio submission.total_score exam.total_points 100 %}%
+                                                </small>
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if submission.submitted_at %}
+                                                {{ submission.submitted_at|date:"M d, Y H:i" }}
+                                                <br><small class="text-muted">{{ submission.submitted_at|timesince }} ago</small>
+                                            {% else %}
+                                                Started: {{ submission.started_at|date:"M d, H:i" }}
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <!-- FIXED: These URLs now point to the grading app -->
+                                                <a href="{% url 'grading:grade_submission' submission.submission_id %}" 
+                                                   class="btn btn-primary">
+                                                    <i class="bi bi-pencil"></i> 
+                                                    {% if submission.is_graded %}Review{% else %}Grade{% endif %}
+                                                </a>
+                                                <a href="{% url 'grading:view_feedback' submission.submission_id %}" 
+                                                   class="btn btn-outline-info">
+                                                    <i class="bi bi-eye"></i> View
+                                                </a>
+                                                <a href="{% url 'grading:simple_grade_submission' submission.submission_id %}" 
+                                                   class="btn btn-outline-warning">
+                                                    <i class="bi bi-lightning"></i> Quick
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        {% if total_submissions > 10 %}
+                        <div class="text-center mt-3">
+                            <a href="{% url 'grading:submissions_list' exam.exam_id %}" class="btn btn-outline-primary">
+                                View All {{ total_submissions }} Submissions
+                            </a>
+                        </div>
+                        {% endif %}
+                        
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-inbox display-4 text-muted"></i>
+                            <p class="mt-3">No submissions yet for this exam.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Student View -->
+    {% if user.role == 'STUDENT' %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Your Status</h5>
+                </div>
+                <div class="card-body">
+                    {% if submission %}
+                        {% if submission.submitted_at %}
+                            <div class="alert alert-success">
+                                <i class="bi bi-check-circle"></i>
+                                You submitted this exam on {{ submission.submitted_at|date:"F d, Y H:i" }}.
+                                {% if submission.is_graded %}
+                                    <br>
+                                    <strong>Your Score:</strong> {{ submission.total_score }}/{{ exam.total_points }}
+                                    ({% widthratio submission.total_score exam.total_points 100 %}%)
+                                {% else %}
+                                    <br>
+                                    <em>Your submission is pending grading.</em>
+                                {% endif %}
+                            </div>
+                            
+                            <a href="{% url 'grading:view_feedback' submission.submission_id %}" 
+                               class="btn btn-primary">
+                                <i class="bi bi-chat-left-text"></i> View Feedback
+                            </a>
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i class="bi bi-clock"></i>
+                                You have started but not submitted this exam.
+                                <br>
+                                <small>Started: {{ submission.started_at|timesince }} ago</small>
+                            </div>
+                            
+                            <a href="{% url 'exams:take_exam' exam.exam_id %}" class="btn btn-success">
+                                <i class="bi bi-pencil"></i> Continue Exam
+                            </a>
+                        {% endif %}
+                    {% else %}
+                        {% if now >= exam.start_date and now <= exam.end_date %}
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i>
+                                You haven't started this exam yet.
+                            </div>
+                            
+                            <a href="{% url 'exams:take_exam' exam.exam_id %}" class="btn btn-primary">
+                                <i class="bi bi-play-circle"></i> Start Exam
+                            </a>
+                        {% elif now < exam.start_date %}
+                            <div class="alert alert-secondary">
+                                <i class="bi bi-calendar"></i>
+                                This exam starts on {{ exam.start_date|date:"F d, Y H:i" }}.
+                            </div>
+                        {% else %}
+                            <div class="alert alert-dark">
+                                <i class="bi bi-calendar-x"></i>
+                                This exam ended on {{ exam.end_date|date:"F d, Y H:i" }}.
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

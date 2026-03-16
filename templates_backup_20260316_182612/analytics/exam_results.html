@@ -1,0 +1,301 @@
+<!-- templates/analytics/exam_results.html -->
+{% extends 'base.html' %}
+
+{% block title %}Results: {{ exam.title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .score-card {
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+    .score-excellent { background: linear-gradient(135deg, #d4edda, #c3e6cb); }
+    .score-good { background: linear-gradient(135deg, #d1ecf1, #bee5eb); }
+    .score-average { background: linear-gradient(135deg, #fff3cd, #ffeaa7); }
+    .score-poor { background: linear-gradient(135deg, #f8d7da, #f5c6cb); }
+    
+    .progress-circle {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+        font-size: 24px;
+        font-weight: bold;
+    }
+    
+    .question-review {
+        border-left: 4px solid #dee2e6;
+        padding-left: 15px;
+        margin-bottom: 15px;
+    }
+    .correct-answer { border-left-color: #28a745; }
+    .incorrect-answer { border-left-color: #dc3545; }
+    .partial-answer { border-left-color: #ffc107; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'exams:exam_list' %}">Exams</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'exams:exam_detail' exam.exam_id %}">{{ exam.title }}</a></li>
+                    <li class="breadcrumb-item active">Results</li>
+                </ol>
+            </nav>
+            <h1>Exam Results</h1>
+            <p class="text-muted">{{ exam.title }} • Submitted on {{ submission.submitted_at|date:"F j, Y g:i A" }}</p>
+        </div>
+    </div>
+
+    <!-- Score Summary -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Overall Score</h5>
+                    <div class="progress-circle 
+                        {% if stats.score_percentage >= 80 %}bg-success text-white
+                        {% elif stats.score_percentage >= 60 %}bg-info text-white
+                        {% elif stats.score_percentage >= 40 %}bg-warning
+                        {% else %}bg-danger text-white{% endif %}">
+                        {{ stats.score_percentage }}%
+                    </div>
+                    <h3>{{ stats.earned_points|floatformat:1 }}/{{ stats.total_points }}</h3>
+                    <p class="text-muted">{{ stats.correct_answers }} of {{ stats.total_questions }} correct</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Performance Breakdown</h5>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="mb-3">
+                                <strong>Accuracy:</strong>
+                                <div class="progress mt-1" style="height: 20px;">
+                                    <div class="progress-bar bg-success" role="progressbar" 
+                                         style="width: {{ stats.accuracy }}%">
+                                        {{ stats.accuracy }}%
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Questions Answered:</strong>
+                                <div class="d-flex justify-content-between">
+                                    <span>{{ stats.answered_questions }}/{{ stats.total_questions }}</span>
+                                    <span>{{ stats.answered_questions|floatformat:0 }}%</span>
+                                </div>
+                                <div class="progress mt-1" style="height: 10px;">
+                                    <div class="progress-bar bg-info" role="progressbar" 
+                                         style="width: {{ stats.answered_questions|floatformat:0 }}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-6">
+                            <div class="mb-3">
+                                <strong>Compared to Others:</strong>
+                                <div class="mt-2">
+                                    {% if stats.percentile %}
+                                        <div class="alert alert-info">
+                                            <i class="bi bi-trophy"></i>
+                                            You scored better than <strong>{{ stats.percentile }}%</strong> of students
+                                        </div>
+                                    {% else %}
+                                        <div class="alert alert-secondary">
+                                            <i class="bi bi-info-circle"></i>
+                                            Comparison data not available
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <strong>Submission Time:</strong>
+                                <p class="mb-0">
+                                    <i class="bi bi-clock"></i>
+                                    {{ submission.submitted_at|timesince:submission.started_at }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Question-by-Question Review -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Question Review</h5>
+            <small class="text-muted">Review your answers and see correct solutions</small>
+        </div>
+        <div class="card-body">
+            {% for item in question_analysis %}
+            <div class="question-review 
+                {% if item.is_correct == True %}correct-answer
+                {% elif item.is_correct == False %}incorrect-answer
+                {% else %}partial-answer{% endif %}">
+                
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6>Question {{ forloop.counter }}</h6>
+                    <span class="badge 
+                        {% if item.is_correct == True %}bg-success
+                        {% elif item.is_correct == False %}bg-danger
+                        {% else %}bg-warning{% endif %}">
+                        {{ item.points_earned|floatformat:1 }}/{{ item.max_points }} points
+                    </span>
+                </div>
+                
+                <p><strong>Question:</strong> {{ item.question.question_text }}</p>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6>Your Answer</h6>
+                                <p class="mb-0">
+                                    {% if item.answer.answer_text %}
+                                        {{ item.answer.answer_text }}
+                                    {% else %}
+                                        <span class="text-muted">No answer provided</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        {% if item.question.correct_answer %}
+                        <div class="card bg-success text-white">
+                            <div class="card-body">
+                                <h6>Correct Answer</h6>
+                                <p class="mb-0">{{ item.question.correct_answer }}</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                {% if item.question.question_type == 'MCQ' %}
+                <div class="mt-2">
+                    <small class="text-muted">Options:</small>
+                    <div class="mt-1">
+                        {% for option in item.question.options %}
+                        <span class="badge 
+                            {% if option == item.question.correct_answer %}bg-success
+                            {% elif option == item.answer.answer_text %}bg-danger
+                            {% else %}bg-secondary{% endif %} me-1">
+                            {{ option }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                <hr class="my-3">
+            </div>
+            {% empty %}
+            <div class="text-center py-4">
+                <i class="bi bi-clipboard-x display-4 text-muted"></i>
+                <p class="mt-3">No answers to review</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Recommendations -->
+    {% if stats.score_percentage < 70 %}
+    <div class="card mb-4 border-warning">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0"><i class="bi bi-lightbulb"></i> Recommendations for Improvement</h5>
+        </div>
+        <div class="card-body">
+            <ul>
+                {% if stats.accuracy < 60 %}
+                <li>Focus on understanding the core concepts tested in this exam</li>
+                <li>Review the questions you got wrong and study the correct answers</li>
+                {% endif %}
+                
+                {% if stats.answered_questions < stats.total_questions %}
+                <li>Make sure to attempt all questions in future exams</li>
+                {% endif %}
+                
+                {% if submission.submitted_at %}
+                <li>You completed the exam in {{ submission.submitted_at|timesince:submission.started_at }}. 
+                    {% if exam.time_limit_minutes %}
+                    Consider managing your time better if you felt rushed.
+                    {% endif %}
+                </li>
+                {% endif %}
+                
+                <li>Practice similar questions to improve your understanding</li>
+                <li>Review course materials related to the topics covered in this exam</li>
+            </ul>
+            
+            <div class="mt-3">
+                <a href="{% url 'exams:exam_detail' exam.exam_id %}" class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-repeat"></i> Retake Practice Test
+                </a>
+                <a href="#" class="btn btn-outline-success">
+                    <i class="bi bi-journal-text"></i> Study Materials
+                </a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="card mb-4 border-success">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="bi bi-award"></i> Excellent Work!</h5>
+        </div>
+        <div class="card-body">
+            <p>Congratulations on your great performance! Here are some next steps:</p>
+            <ul>
+                <li>Challenge yourself with more difficult exams</li>
+                <li>Help other students by explaining concepts you mastered</li>
+                <li>Explore advanced topics related to this subject</li>
+            </ul>
+            <div class="mt-3">
+                <button class="btn btn-outline-success">
+                    <i class="bi bi-share"></i> Share Your Achievement
+                </button>
+                <a href="{% url 'exams:exam_list' %}" class="btn btn-primary">
+                    <i class="bi bi-arrow-right"></i> Take Another Exam
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="card">
+        <div class="card-body">
+            <div class="d-flex justify-content-between">
+                <a href="{% url 'exams:exam_detail' exam.exam_id %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Exam
+                </a>
+                <div>
+                    <button class="btn btn-outline-primary me-2">
+                        <i class="bi bi-download"></i> Download Results
+                    </button>
+                    <a href="{% url 'analytics:performance_dashboard' %}" class="btn btn-primary">
+                        <i class="bi bi-bar-chart"></i> View All Performance
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
