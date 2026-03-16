@@ -567,38 +567,66 @@ def bulk_grade(request, exam_id):
     return render(request, 'grading/bulk_grade.html', context)
 
 
+
 @login_required
 def view_feedback(request, submission_id):
     """View feedback for a submission (for students)"""
-    submission = get_object_or_404(
-        Submission.objects.select_related('student', 'exam'),
-        submission_id=submission_id
-    )
+    submission = get_object_or_404(Submission, submission_id=submission_id)
     
     # Check permissions
-    if request.user.role == 'STUDENT' and submission.student != request.user:
-        messages.error(request, 'Access denied.')
-        return redirect('core:dashboard')
+    if request.user.role != 'STUDENT' or submission.student != request.user:
+        if request.user.role not in ['INSTRUCTOR', 'ADMIN']:
+            messages.error(request, 'Access denied.')
+            return redirect('core:dashboard')
     
-    if request.user.role not in ['STUDENT', 'INSTRUCTOR', 'ADMIN']:
-        messages.error(request, 'Access denied.')
-        return redirect('core:dashboard')
-    
+    # Get all answers with related question data
     answers = submission.answers.select_related('question').order_by('question__position')
     
-    # Check if submission has flags (for instructors)
-    active_flags = None
-    if request.user.role in ['INSTRUCTOR', 'ADMIN']:
-        active_flags = SubmissionFlag.objects.filter(
-            submission_id=submission_id,
-            status__in=['active', 'in_review']
-        )
+    # Calculate statistics
+    total_questions = answers.count()
+    correct_count = 0
+    partial_count = 0
+    incorrect_count = 0
+    total_points_earned = 0
+    total_points_possible = 0
+    
+    for answer in answers:
+        question = answer.question
+        total_points_possible += float(question.points)
+        
+        if answer.points_awarded is not None:
+            total_points_earned += float(answer.points_awarded)
+            
+            # Check if answer is correct, partial, or incorrect
+            if float(answer.points_awarded) >= float(question.points) * 0.99:  # Within 1% of max points
+                correct_count += 1
+            elif float(answer.points_awarded) > 0:
+                partial_count += 1
+            else:
+                incorrect_count += 1
+        else:
+            # Not graded yet
+            incorrect_count += 1
+    
+    # Calculate percentage
+    if total_points_possible > 0:
+        percentage = (total_points_earned / total_points_possible) * 100
+    else:
+        percentage = 0
     
     context = {
         'submission': submission,
         'exam': submission.exam,
         'answers': answers,
-        'active_flags': active_flags,
+        'stats': {
+            'total_questions': total_questions,
+            'correct_count': correct_count,
+            'partial_count': partial_count,
+            'incorrect_count': incorrect_count,
+            'total_points_earned': round(total_points_earned, 2),
+            'total_points_possible': total_points_possible,
+            'percentage': round(percentage, 1),
+        }
     }
     
     return render(request, 'grading/view_feedback.html', context)

@@ -1,4 +1,4 @@
-# apps/analytics/urls.py - UPDATED VERSION
+# apps/analytics/urls.py
 from django.urls import path
 from . import views
 

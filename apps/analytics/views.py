@@ -14,6 +14,7 @@ from apps.analytics.services import (
     InstitutionalAnalytics,
     ReportingService
 )
+import json
 
 @login_required
 def analytics_dashboard(request):
@@ -21,7 +22,7 @@ def analytics_dashboard(request):
     user = request.user
     
     if user.role == 'STUDENT':
-        return student_performance(request, user.id)
+        return student_performance(request)
     elif user.role == 'INSTRUCTOR':
         return instructor_dashboard(request)
     elif user.role == 'ADMIN':
@@ -60,12 +61,11 @@ def instructor_dashboard(request):
     # Calculate overall statistics
     total_students = 0
     for course in courses:
-        total_students += course.enrollments.filter(is_active=True).count()
+        total_students += course.enrollment_set.filter(is_active=True).count()
     
     # Get insights
     insights = []
-    if len(course_performance) > 0:
-        # Add some example insights
+    if course_performance:
         avg_performance = sum(cp['overview']['average_score'] for cp in course_performance if 'overview' in cp) / len(course_performance)
         
         if avg_performance < 60:
@@ -87,11 +87,11 @@ def instructor_dashboard(request):
         'total_courses': courses.count(),
         'total_exams': Exam.objects.filter(instructor=request.user).count(),
         'total_students': total_students,
-        'active_courses': courses.count(),  # Simplified - you could filter by active
+        'active_courses': courses.count(),
         'active_exams': recent_exams.count(),
         'active_students': total_students,
         'average_score': avg_performance if 'avg_performance' in locals() else 0,
-        'student_rankings': [],  # You would populate this from InstitutionalAnalytics
+        'student_rankings': [],
         'insights': insights,
     }
     
@@ -132,8 +132,8 @@ def student_performance(request, student_id=None):
     # Get enrolled courses (for filter dropdown)
     if student.role == 'STUDENT':
         enrolled_courses = Course.objects.filter(
-            enrollments__student=student,
-            enrollments__is_active=True
+            enrollment__student=student,
+            enrollment__is_active=True
         ).distinct()
     else:
         enrolled_courses = Course.objects.filter(instructor=student)
@@ -144,21 +144,32 @@ def student_performance(request, student_id=None):
         'enrolled_courses': enrolled_courses,
         'selected_course': course,
         'time_period_days': time_period_days,
+        'page_title': f'Performance - {student.get_full_name() if student.get_full_name() else student.email}',
     }
     
     return render(request, 'analytics/student_performance.html', context)
 
 @login_required
 def exam_results(request, exam_id):
-    """View detailed exam results for a student (keep your existing functionality)"""
+    """View detailed exam results for a student"""
     exam = get_object_or_404(Exam, exam_id=exam_id)
     user = request.user
     
-    # Get student's submission
-    submission = get_object_or_404(Submission, exam=exam, student=user)
+    # Check if student has access
+    if user.role == 'STUDENT':
+        submission = get_object_or_404(Submission, exam=exam, student=user)
+    else:
+        # Instructor/admin can specify which student
+        student_id = request.GET.get('student_id')
+        if student_id:
+            student = get_object_or_404(CustomUser, id=student_id)
+            submission = get_object_or_404(Submission, exam=exam, student=student)
+        else:
+            messages.error(request, 'Please specify a student.')
+            return redirect('exams:exam_detail', exam_id=exam_id)
     
     if not submission.submitted_at:
-        messages.error(request, 'You have not submitted this exam yet.')
+        messages.error(request, 'This exam has not been submitted yet.')
         return redirect('exams:exam_detail', exam_id=exam_id)
     
     # Get all answers for this submission
@@ -168,37 +179,54 @@ def exam_results(request, exam_id):
     total_questions = exam.questions.count()
     answered_questions = answers.count()
     correct_answers = 0
+    partial_answers = 0
+    incorrect_answers = 0
     total_points = 0
     earned_points = 0
     
     for answer in answers:
-        total_points += answer.question.points
+        total_points += float(answer.question.points)
         if answer.points_awarded:
-            earned_points += answer.points_awarded
-            if answer.points_awarded == answer.question.points:
+            earned_points += float(answer.points_awarded)
+            if float(answer.points_awarded) >= float(answer.question.points) * 0.99:
                 correct_answers += 1
+            elif float(answer.points_awarded) > 0:
+                partial_answers += 1
+            else:
+                incorrect_answers += 1
+        else:
+            incorrect_answers += 1
     
     # Calculate percentages
     accuracy = (correct_answers / total_questions * 100) if total_questions > 0 else 0
     score_percentage = (earned_points / total_points * 100) if total_points > 0 else 0
     
-    # Get performance compared to others (if available)
+    # Get performance compared to others
     all_submissions = Submission.objects.filter(exam=exam, submitted_at__isnull=False)
     total_students = all_submissions.count()
     
-    # Calculate percentile if there are other students
+    # Calculate percentile
     percentile = None
-    if total_students > 1:
+    if total_students > 1 and submission.total_score:
         better_students = all_submissions.filter(total_score__gt=submission.total_score).count()
         percentile = ((total_students - better_students) / total_students) * 100
     
     # Prepare question-by-question analysis
     question_analysis = []
     for answer in answers:
+        is_correct = False
+        is_partial = False
+        if answer.points_awarded:
+            if float(answer.points_awarded) >= float(answer.question.points) * 0.99:
+                is_correct = True
+            elif float(answer.points_awarded) > 0:
+                is_partial = True
+        
         question_analysis.append({
             'question': answer.question,
             'answer': answer,
-            'is_correct': answer.points_awarded == answer.question.points if answer.points_awarded else None,
+            'is_correct': is_correct,
+            'is_partial': is_partial,
             'points_earned': answer.points_awarded or 0,
             'max_points': answer.question.points,
         })
@@ -206,12 +234,15 @@ def exam_results(request, exam_id):
     context = {
         'exam': exam,
         'submission': submission,
+        'student': submission.student,
         'answers': answers,
         'question_analysis': question_analysis,
         'stats': {
             'total_questions': total_questions,
             'answered_questions': answered_questions,
             'correct_answers': correct_answers,
+            'partial_answers': partial_answers,
+            'incorrect_answers': incorrect_answers,
             'accuracy': round(accuracy, 1),
             'total_points': total_points,
             'earned_points': earned_points,
@@ -230,7 +261,7 @@ def exam_analytics(request, exam_id):
     
     # Check permissions
     if request.user.role not in ['INSTRUCTOR', 'ADMIN']:
-        if request.user.role == 'STUDENT' and exam.instructor != request.user:
+        if exam.instructor != request.user:
             messages.error(request, 'Only instructors can view exam analytics.')
             return redirect('exams:exam_detail', exam_id=exam_id)
     
@@ -272,7 +303,7 @@ def course_analytics(request, course_id):
 
 @login_required
 def performance_dashboard(request):
-    """Student's overall performance dashboard - keep your existing functionality"""
+    """Student's overall performance dashboard"""
     user = request.user
     
     # Get all submitted exams
@@ -285,7 +316,7 @@ def performance_dashboard(request):
     total_exams = submissions.count()
     average_score = 0
     best_score = 0
-    worst_score = 100
+    worst_score = 0
     
     if total_exams > 0:
         total_scores = [s.total_score for s in submissions if s.total_score]
@@ -297,15 +328,15 @@ def performance_dashboard(request):
     # Get recent activity
     recent_exams = submissions[:5]
     
-    # Calculate progress over time (simplified)
+    # Calculate progress over time
     progress_data = []
-    for i, submission in enumerate(submissions[:10][::-1]):
+    for submission in submissions.order_by('submitted_at')[:10]:
         if submission.total_score and submission.exam.total_points > 0:
             percentage = (submission.total_score / submission.exam.total_points) * 100
             progress_data.append({
-                'exam': submission.exam.title,
+                'exam': submission.exam.title[:20],
                 'score': float(percentage),
-                'date': submission.submitted_at,
+                'date': submission.submitted_at.strftime('%Y-%m-%d'),
             })
     
     context = {
@@ -394,6 +425,7 @@ def api_student_progress(request, student_id=None):
     performance = PerformanceAnalytics.get_student_performance(student)
     return JsonResponse(performance)
 
+@login_required
 def admin_dashboard(request):
     """Analytics dashboard for administrators"""
     if request.user.role != 'ADMIN':
@@ -401,10 +433,7 @@ def admin_dashboard(request):
         return redirect('analytics:dashboard')
     
     # Get overall statistics
-    total_courses = Course.objects.count()
-    total_exams = Exam.objects.count()
-    total_students = CustomUser.objects.filter(role='STUDENT').count()
-    total_instructors = CustomUser.objects.filter(role='INSTRUCTOR').count()
+    overview = InstitutionalAnalytics.get_institution_overview()
     
     # Get recent activity
     recent_submissions = Submission.objects.filter(
@@ -412,10 +441,7 @@ def admin_dashboard(request):
     ).select_related('exam', 'student').order_by('-submitted_at')[:10]
     
     context = {
-        'total_courses': total_courses,
-        'total_exams': total_exams,
-        'total_students': total_students,
-        'total_instructors': total_instructors,
+        'overview': overview,
         'recent_submissions': recent_submissions,
     }
     

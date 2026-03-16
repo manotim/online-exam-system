@@ -227,7 +227,7 @@
                             <a class="nav-link {% if 'past-exams' in request.path %}active{% endif %}" href="{% url 'exams:past_exams' %}">
                                 <i class="bi bi-clock-history"></i> Past Exams
                             </a>
-                            <a class="nav-link" href="#">
+                            <a class="nav-link {% if 'analytics/student' in request.path %}active{% endif %}" href="{% url 'analytics:student_performance' %}">
                                 <i class="bi bi-bar-chart"></i> My Performance
                             </a>
                         </nav>
